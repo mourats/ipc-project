@@ -75,6 +75,7 @@ int pubsub_cancel(int topic_id);
 int pubsub_publish(int topic_id, int msg) {
     struct Topic *t = open_shm_segment(topic_id);
     t->msg[t->msg_index] = msg;
+    t->msg_index++;
     
     //detach from shared memory
     return close_shm_segment(t);
@@ -91,7 +92,11 @@ int main(void)
     struct Topic *t = open_shm_segment(11);
     printf("before publish %d\n", t->msg[0]);
     pubsub_publish(11, 5028); // escreve no topico 11 criado anterior mente a msg 5028
+    pubsub_publish(11, 3000);
+    pubsub_publish(11, 4666);
     printf("after publish %d\n", t->msg[0]);
+    printf("after publish %d\n", t->msg[1]);
+    printf("after publish %d\n", t->msg[2]);
     printf("%d", destroy_shm_segment(11)); // se nao quiser excluir so usar o metodo close_shm_segment() que as infos ficam salvas;
   
   return 0;
