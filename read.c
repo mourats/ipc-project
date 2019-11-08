@@ -16,7 +16,7 @@ int main()
     };
     struct Data *p;
 
-    // ftok to generate unique key 
+    // ftok to generate unique key
     key = ftok(path, KEY);
   
     // shmget returns an identifier in shmid 
