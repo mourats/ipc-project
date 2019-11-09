@@ -5,9 +5,9 @@
 
 struct Topic {
     int id;
-    int pubs_count; // publishers number
-    int subs_count; // subscribers number
-    int pid[50]; // size max of publishers + subscribers
+    int pubs_subs_count; // publishers and subscribers size
+    int pid_pub[50]; // size max of publishers 
+    int pid_sub[50][2]; // size max of subscribers
     int msg[100]; // size max of messages
     int id_index; // index of head messages on array
     int msg_index; // index of end of messages on array
