@@ -78,6 +78,7 @@ int pubsub_create_topic(int topic_id) {
     struct Topic *t = open_shm_segment(topic_id);
     t->pubs_subs_count = sizeof t->pid_pub / sizeof *t->pid_pub;
     t->msg_count = sizeof t->msg / sizeof *t->msg;
+    t->msg_index = 0;
     t->id = topic_id;
     fill_pids(t);
     p->tLink = t;
@@ -136,6 +137,8 @@ int pubsub_subscribe(int topic_id) {
     return sub_id;
 }
 
+// um processo subscriber que vai cancelar a subscrição 
+// feita para o tópico
 int pubsub_cancel(int topic_id) {
     struct Topic *t = open_shm_segment(topic_id);
 
@@ -143,17 +146,10 @@ int pubsub_cancel(int topic_id) {
     pid_t pubsub_id = getpid();
     
     for(int i = 0; i < t->pubs_subs_count; i++) {
-        int breakyes = FALSE;
-        if(t->pid_pub[i] == pubsub_id) {
-            t->pid_pub[i] = -1;
-            breakyes = TRUE;
-        }
         if(t->pid_sub[i][0] == pubsub_id) {
             t->pid_sub[i][0] = -1;
-            breakyes = TRUE;
+            break;
         }
-
-        if(breakyes) break;
     }
     sem_post(&mutex);
 
@@ -172,6 +168,22 @@ int contain_pub(pid_t pid, struct Topic *t) {
     return contain;
 }
 
+// conferir se todos os subcribers leram até a última mensagem antes
+// da última mensagem publicada
+int did_everyone_read(struct Topic *t) {
+    int everybody_read = TRUE;
+    for(int i = 0; i < t->pubs_subs_count; i++) {
+        if(t->pid_sub[i][0] != -1 && t->pid_sub[i][1] < t->msg_index) {
+            everybody_read = FALSE;
+            break;
+        }
+    }
+
+    return everybody_read;
+}
+
+// caso o buffer esteja na posição máx, é conferido se todo mundo leu, caso sim
+// ele volta para o começo, caso não, é lançado um erro
 int pubsub_publish(int topic_id, int msg) {
     struct Topic *t = open_shm_segment(topic_id);
 
@@ -183,13 +195,17 @@ int pubsub_publish(int topic_id, int msg) {
         exit(1);
     }
 
-    if(t->msg_count == t->msg_index) {
-        sem_post(&mutex);
-        perror("buffer cheio");
-        exit(1);
+    // se for atingido o limite do buffer, espera até que todo mundo tenha lido
+    // a última mensagem
+    if(t->msg_index % t->msg_count == 0) {
+        if(!did_everyone_read(t)) {
+            sem_post(&mutex);
+            perror("buffer cheio, tente mais tarde");
+            exit(1);
+        }
     }
 
-    t->msg[t->msg_index] = msg;
+    t->msg[t->msg_index % t->msg_count] = msg;
     t->msg_index++;
     sem_post(&mutex);
     
@@ -197,6 +213,8 @@ int pubsub_publish(int topic_id, int msg) {
     return close_shm_segment(t);
 }
 
+// retorna a posição no array de subscribers do subscriber com o pid passado
+// como no parâmetro
 int getpos_sub(pid_t pid, struct Topic *t) {
     int contain = -1;
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -221,8 +239,17 @@ int pubsub_read(int topic_id) {
         exit(1);
     }
 
-    int possub_read = t->pid_sub[pos_sub][1];
-    int msg = t->msg[possub_read];
+    int index_msg_read = t->pid_sub[pos_sub][1];
+
+    // caso a próx mensagem ainda não tenha sido publicada, é
+    // lançado um erro
+    if(index_msg_read >= t->msg_index) {
+        sem_post(&mutex);
+        perror("sem novas mensagens, volte mais tarde");
+        exit(1);
+    }
+    
+    int msg = t->msg[index_msg_read % t->msg_count];
     t->pid_sub[pos_sub][1]++;
     sem_post(&mutex);
 
@@ -232,26 +259,43 @@ int pubsub_read(int topic_id) {
 int main(void)
 {
     pubsub_init();
-    pubsub_create_topic(2);
+    pubsub_create_topic(15);
 
     printf("size of complete Pub struct: %zu\n", sizeof(struct Pub));
     printf("size of single Topic struct: %zu\n", sizeof(p->tLink));
 
-    struct Topic *t = open_shm_segment(2);
+    struct Topic *t = open_shm_segment(15);
 
-    pubsub_join(2);
+    pubsub_join(15);
     printf("pid pub %d\n", t->pid_pub[0]);
 
-    pubsub_subscribe(2);
+    pubsub_subscribe(15);
     printf("pid sub %d\n", t->pid_sub[0][0]);
 
-    pubsub_publish(2, 100);
-    pubsub_publish(2, 200);
-    printf("msg publish 0 %d\n", t->msg[0]);
-    printf("msg publish 1 %d\n", t->msg[1]);
+    pubsub_publish(15, 100);
+    printf("msg published 0 %d\n", t->msg[0]);
+    pubsub_publish(15, 200);
+    printf("msg published 1 %d\n", t->msg[1]);
+    pubsub_publish(15, 300);
+    printf("msg published 2 %d\n", t->msg[2]);
 
-    printf("msg read 0 %d\n", pubsub_read(2));
-    printf("msg read 1 %d\n", pubsub_read(2));
+    printf("msg read 0 %d\n", pubsub_read(15));
+    printf("msg read 1 %d\n", pubsub_read(15));
+    printf("msg read 2 %d\n", pubsub_read(15));
+
+    pubsub_publish(15, 600);
+    printf("msg published 3 %d\n", t->msg[0]);
+    printf("msg read 3 %d\n", pubsub_read(15));
+    printf("msg read 4 %d\n", pubsub_read(15));
+    
+
+    // pubsub_publish(3, 200);
+    // printf("msg publish 0 %d\n", t->msg[0]);
+    // printf("msg publish 1 %d\n", t->msg[1]);
+
+    // printf("msg read 0 %d\n", pubsub_read(3));
+    // printf("msg read 1 %d\n", pubsub_read(3));
+    // printf("msg read 2 %d\n", pubsub_read(3));
 
     // pubsub_join(12);
     // printf("%d\n", t->pid_pub[0]);
