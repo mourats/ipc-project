@@ -37,7 +37,7 @@ struct Topic * open_shm_segment(int topic_id) {
         exit(1);
     }
     /* Report */
-    // printf("ID do segmento de memoria: %d\n", shm_id);
+    printf("ID do segmento de memoria: %d\n", shm_id);
     //printf("Segmento associado a chave unica: %d\n", key);
   
     // shmat to attach to shared memory
@@ -236,7 +236,7 @@ int pubsub_read(int topic_id) {
     if(pos_sub == -1) {
         sem_post(&mutex);
         perror("error pubsub_read");
-        exit(1);
+        return 0;
     }
 
     int index_msg_read = t->pid_sub[pos_sub][1];
@@ -245,17 +245,19 @@ int pubsub_read(int topic_id) {
     // lançado um erro
     if(index_msg_read >= t->msg_index) {
         sem_post(&mutex);
-        perror("sem novas mensagens, volte mais tarde");
-        exit(1);
+        printf("sem novas mensagens, volte mais tarde\n");
+        return 0;
     }
     
     int msg = t->msg[index_msg_read % t->msg_count];
     t->pid_sub[pos_sub][1]++;
     sem_post(&mutex);
 
+    printf("mensagem zero: %d\n", t->msg[t->pid_sub[pos_sub][1]-1]);
+
     return msg;
 }
-
+/*
 int main(void)
 {
     pubsub_init();
@@ -272,6 +274,7 @@ int main(void)
     pubsub_subscribe(15);
     printf("pid sub %d\n", t->pid_sub[0][0]);
 
+
     pubsub_publish(15, 100);
     printf("msg published 0 %d\n", t->msg[0]);
     pubsub_publish(15, 200);
@@ -286,6 +289,9 @@ int main(void)
     pubsub_publish(15, 600);
     printf("msg published 3 %d\n", t->msg[0]);
     printf("msg read 3 %d\n", pubsub_read(15));
+
+    printf("segmento excluido %d", destroy_shm_segment(15)); // se nao quiser excluir so usar o metodo close_shm_segment() que as infos ficam salvas;
+
     printf("msg read 4 %d\n", pubsub_read(15));
     
 
@@ -313,7 +319,8 @@ int main(void)
     // pubsub_publish(12, 4666);
     // printf("after publish %d\n", t->msg[1]);
     // printf("after publish %d\n", t->msg[2]);
-    // printf("%d", destroy_shm_segment(11)); // se nao quiser excluir so usar o metodo close_shm_segment() que as infos ficam salvas;
+    
   
   return 0;
 }
+*/
