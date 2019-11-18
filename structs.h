@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h> 
+#include <sys/types.h>
 
 struct Topic {
     int id;
@@ -16,7 +17,8 @@ struct Topic {
 
 struct Pub {
     int id;
-    struct Topic *tLink; // linked list to dinamyc size of different topics
+    struct Topic * t[2]; // linked list to dinamyc size of different topics
+    int pos_topic;
 };
 
 struct Pub * pubsub_init();
@@ -27,4 +29,6 @@ int pubsub_join(int topic_id);
 int pubsub_subscribe(int topic_id);
 int pubsub_cancel(int topic_id);
 int pubsub_publish(int topic_id, int msg);
+int getpos_pub(pid_t pid, struct Topic * t);
+int getpos_sub(pid_t pid, struct Topic * t);
 int pubsub_read(int topic_id);

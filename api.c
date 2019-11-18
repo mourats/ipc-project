@@ -18,6 +18,7 @@ pthread_mutex_t mutex;
 struct Pub* pubsub_init() {
     p = (struct Pub*) malloc(sizeof(struct Pub*));
     p->id = 0;
+    p->pos_topic = 0;
     return p;
 }
 
@@ -86,7 +87,8 @@ int pubsub_create_topic(int topic_id) {
     t->msg_index = 0;
     t->id = topic_id;
     fill_pids(t);
-    p->tLink = t;
+    p->t[p->pos_topic] = t;
+    p->pos_topic++;
 
     //detach from shared memory
     return close_shm_segment(t);
@@ -228,6 +230,20 @@ int pubsub_publish(int topic_id, int msg) {
     
     //detach from shared memory
     return close_shm_segment(t);
+}
+
+// retorna a posição no array de publishers do publisher com o pid passado
+// como no parâmetro
+int getpos_pub(pid_t pid, struct Topic *t) {
+    int contain = -1;
+    for(int i = 0; i < t->pubs_subs_count; i++) {
+        if(t->pid_pub[i] == pid) {
+            contain = i;
+            break;
+        }
+    }
+
+    return contain;
 }
 
 // retorna a posição no array de subscribers do subscriber com o pid passado

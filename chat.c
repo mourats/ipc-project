@@ -5,6 +5,14 @@
 
 #include "structs.h"
 
+int get_msg(struct Topic * t) {
+    int pos_msg = t->msg_count - 1;
+    if(t->msg_index % t->msg_count != 0) 
+        pos_msg = (t->msg_index % t->msg_count) - 1;
+    
+    return t->msg[pos_msg];
+}
+
 int main(void) {
     while(1) {
         int opcao;
@@ -21,6 +29,7 @@ int main(void) {
 
         int id;
         int msg;
+        int pos;
         struct Topic * t;
         switch (opcao)
         {
@@ -40,8 +49,8 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             pubsub_join(id);
-            printf("pub pid 0: %d\n", t->pid_pub[0]);
-            printf("pub pid 1: %d\n", t->pid_pub[1]);
+            pos = getpos_pub(getpid(), t);
+            printf("pub pid: %d\n", t->pid_pub[pos]);
             break;
         case 4:
             printf("Digite o id do tópico\n");
@@ -49,8 +58,8 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             pubsub_subscribe(id);
-            printf("sub pid 0: %d\n", t->pid_sub[0][0]);
-            printf("sub pid 1: %d\n", t->pid_sub[1][0]);
+            pos = getpos_sub(getpid(), t);
+            printf("sub pid: %d\n", t->pid_sub[pos][0]);
             break;
         case 5:
             printf("Digite o id do tópico e a mensagem\n");
@@ -58,70 +67,28 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             pubsub_publish(id, msg);
-            printf("mensagem publicada: %d\n", t->msg[(t->msg_index % t->msg_count) - 1]);
+            printf("mensagem publicada: %d\n", get_msg(t));
             break;
         case 6:
             printf("Digite o id do tópico\n");
             scanf("%d", &id);
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
-            printf("mensagem lida: %d\n", pubsub_read(id));
+            pubsub_read(id);
             break;
         case 7:
             printf("Digite o id do tópico\n");
             scanf("%d", &id);
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
+            pos = getpos_sub(getpid(), t);
+            printf("sub pid antes: %d\n", t->pid_sub[pos][0]);
             pubsub_cancel(id);
-            printf("sub pid 0: %d\n", t->pid_sub[0][0]);
-            printf("sub pid 1: %d\n", t->pid_sub[1][0]);
+            printf("sub pid depois: %d\n", t->pid_sub[pos][0]);
             break;
         default:
             return 0;
         }
-
-        // printf("Quer iniciar o pub? 1- sim 2- não\n");
-        // scanf("%d", &arm);
-        
-        // if(arm == 1) {
-        //     struct Pub * p = pubsub_init();
-        //     printf("%d\n", p->id);
-        // } else {
-        //     printf("Quer criar um tópico? 1- sim 2- não\n");
-        //     scanf("%d", &arm);
-
-        //     if(arm == 1) {
-        //         pubsub_create_topic(32);
-        //         struct Topic *t = open_shm_segment(32);
-        //         printf("tópico criado: %d\n", t->id);
-        //         printf("%d\n", get_shmid_segment(32));
-        //     } else {
-        //         struct Topic *t = open_shm_segment(32);
-        //         printf("abri o tópico de id %d\n", t->id);
-        //         printf("%d\n", get_shmid_segment(32));
-                
-        //         printf("join ou subscribe 1- join 2- subscribe\n");
-        //         scanf("%d", &arm);
-
-        //         if(arm == 1) {
-        //             printf("pid pub %d\n", t->pid_pub[0]);
-        //             pubsub_join(32);
-        //             printf("pid pub %d\n", t->pid_pub[0]);
-        //             int i;
-        //             scanf("%d", &i);
-        //             pubsub_publish(32, 100);
-        //             printf("msg published 0 %d\n", t->msg[0]);
-        //         } else {
-        //             printf("pid sub %d\n", t->pid_sub[0][0]);
-        //             pubsub_subscribe(32);
-        //             printf("pid sub %d\n", t->pid_sub[0][0]);
-        //             pubsub_read(32);
-        //             int j;
-        //             scanf("%d", &j);
-        //             printf("msg read 0 %d\n", pubsub_read(32));
-        //         }
-        //     }
-        // }
     }
     // pubsub_init();
     // pubsub_create_topic(12);
