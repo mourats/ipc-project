@@ -3,50 +3,35 @@
 #include <unistd.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h>
-// #include <semaphore.h>
 #include <pthread.h>
-
 #include "structs.h"
 
 #define TRUE 1
 #define FALSE 0
 
 struct Pub *p;
-// sem_t mutex;
 pthread_mutex_t mutex;
 
-struct Pub* pubsub_init() {
+int pubsub_init() {
     p = (struct Pub*) malloc(sizeof(struct Pub*));
-    p->id = 0;
     p->pos_topic = 0;
-    return p;
+    return 0;
 }
 
-// return a pointer above shared memory segment
-struct Topic * open_shm_segment(int topic_id) {
-    int shm_id;
-    int size = 1024;
-    
-    /* ftok to generate unique key
-    key_t key; 
+key_t get_ftok() {
     char const *path = "shmfile";
-    #define KEY 61
-    key = ftok(path, KEY);
-    printf("Segmento associado a chave unica: %d\n", key);
-    */
+    return ftok("shmfile", 51);
+}
 
+struct Topic * open_shm_segment(int topic_id) {
     // shmget returns an identifier in shmid
-    shm_id = shmget((key_t) topic_id, sizeof(struct Topic), 0666 | IPC_CREAT);
+    int shm_id = shmget(get_ftok(), sizeof(struct Topic), 0666 | IPC_CREAT);
     if (shm_id == -1) {
         perror("Erro shmget()");
         exit(1);
     }
-    /* Report */
-    // printf("ID do segmento de memoria: %d\n", shm_id);
-    //printf("Segmento associado a chave unica: %d\n", key);
-  
-    // shmat to attach to shared memory
-    // return the pointer to shared memory segment
+
+    // shmat to attach and return the pointer to shared memory segment
     return ((struct Topic*) shmat(shm_id, NULL,0));
 }
 
@@ -224,12 +209,16 @@ int pubsub_publish(int topic_id, int msg) {
     }
 
     t->msg[t->msg_index % t->msg_count] = msg;
+    int mensagem_retorno = t->msg[t->msg_index];
     t->msg_index++;
     // sem_post(&mutex);
     pthread_mutex_unlock(&mutex);
     
     //detach from shared memory
-    return close_shm_segment(t);
+    //return close_shm_segment(t);
+
+    close_shm_segment(t);
+    return mensagem_retorno;
 }
 
 // retorna a posição no array de publishers do publisher com o pid passado
@@ -292,65 +281,3 @@ int pubsub_read(int topic_id) {
 
     return msg;
 }
-
-// int main(void)
-// {
-//     pubsub_init();
-//     pubsub_create_topic(15);
-
-//     printf("size of complete Pub struct: %zu\n", sizeof(struct Pub));
-//     printf("size of single Topic struct: %zu\n", sizeof(p->tLink));
-
-//     struct Topic *t = open_shm_segment(15);
-
-//     pubsub_join(15);
-//     printf("pid pub %d\n", t->pid_pub[0]);
-
-//     pubsub_subscribe(15);
-//     printf("pid sub %d\n", t->pid_sub[0][0]);
-
-//     pubsub_publish(15, 100);
-//     printf("msg published 0 %d\n", t->msg[0]);
-//     pubsub_publish(15, 200);
-//     printf("msg published 1 %d\n", t->msg[1]);
-//     pubsub_publish(15, 300);
-//     printf("msg published 2 %d\n", t->msg[2]);
-
-//     printf("msg read 0 %d\n", pubsub_read(15));
-//     printf("msg read 1 %d\n", pubsub_read(15));
-//     printf("msg read 2 %d\n", pubsub_read(15));
-
-//     pubsub_publish(15, 600);
-//     printf("msg published 3 %d\n", t->msg[0]);
-//     printf("msg read 3 %d\n", pubsub_read(15));
-//     printf("msg read 4 %d\n", pubsub_read(15));
-    
-
-//     // pubsub_publish(3, 200);
-//     // printf("msg publish 0 %d\n", t->msg[0]);
-//     // printf("msg publish 1 %d\n", t->msg[1]);
-
-//     // printf("msg read 0 %d\n", pubsub_read(3));
-//     // printf("msg read 1 %d\n", pubsub_read(3));
-//     // printf("msg read 2 %d\n", pubsub_read(3));
-
-//     // pubsub_join(12);
-//     // printf("%d\n", t->pid_pub[0]);
-
-//     // printf("before publish %d\n", t->msg[t->msg_index]);
-//     // pubsub_publish(12, 5028); // escreve no topico 11 criado anterior mente a msg 5028
-//     // printf("after publish %d\n", t->msg[t->msg_index - 1]);
-
-//     // pubsub_cancel(12);
-//     // printf("before publish %d\n", t->msg[t->msg_index]);
-//     // pubsub_publish(12, 666); // escreve no topico 11 criado anterior mente a msg 5028
-//     // printf("after publish %d\n", t->msg[t->msg_index - 1]);
-
-//     // pubsub_publish(12, 3000);
-//     // pubsub_publish(12, 4666);
-//     // printf("after publish %d\n", t->msg[1]);
-//     // printf("after publish %d\n", t->msg[2]);
-//     // printf("%d", destroy_shm_segment(11)); // se nao quiser excluir so usar o metodo close_shm_segment() que as infos ficam salvas;
-  
-//   return 0;
-// }
