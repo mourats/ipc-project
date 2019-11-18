@@ -3,18 +3,22 @@
 #include <unistd.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h>
+// #include <semaphore.h>
+#include <pthread.h>
+
 #include "structs.h"
-#include <semaphore.h>
 
 #define TRUE 1
 #define FALSE 0
 
 struct Pub *p;
-sem_t mutex;
+// sem_t mutex;
+pthread_mutex_t mutex;
 
-int pubsub_init() {
+struct Pub* pubsub_init() {
     p = (struct Pub*) malloc(sizeof(struct Pub*));
     p->id = 0;
+    return p;
 }
 
 // return a pointer above shared memory segment
@@ -73,7 +77,8 @@ void fill_pids(struct Topic *t) {
 }
 
 int pubsub_create_topic(int topic_id) {
-    sem_init(&mutex, 0, 1);
+    // sem_init(&mutex, 0, 1);
+    pthread_mutex_init(&mutex, NULL);
 
     struct Topic *t = open_shm_segment(topic_id);
     t->pubs_subs_count = sizeof t->pid_pub / sizeof *t->pid_pub;
@@ -90,7 +95,8 @@ int pubsub_create_topic(int topic_id) {
 int pubsub_join(int topic_id) {
     struct Topic *t = open_shm_segment(topic_id);
 
-    sem_wait(&mutex);
+    // sem_wait(&mutex);
+    pthread_mutex_lock(&mutex);
     pid_t pub_id = getpid();
     
     int fit = FALSE;
@@ -103,11 +109,13 @@ int pubsub_join(int topic_id) {
     }
 
     if(!fit) {
-        sem_post(&mutex);
-        perror("error pubsub_join");
-        exit(1);
+        printf("erro pubsub_join\n");
+        pthread_mutex_unlock(&mutex);
+        // sem_post(&mutex);
+        return 0;
     }
-    sem_post(&mutex);
+    // sem_post(&mutex);
+    pthread_mutex_unlock(&mutex);
 
     return pub_id;
 }
@@ -115,7 +123,8 @@ int pubsub_join(int topic_id) {
 int pubsub_subscribe(int topic_id) {
     struct Topic *t = open_shm_segment(topic_id);
 
-    sem_wait(&mutex);
+    // sem_wait(&mutex);
+    pthread_mutex_lock(&mutex);
     pid_t sub_id = getpid();
     int fit = FALSE;
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -128,11 +137,13 @@ int pubsub_subscribe(int topic_id) {
     }
 
     if(!fit) {
-        sem_post(&mutex);
-        perror("error pubsub_subscribe");
-        exit(1);
+        printf("error pubsub_subscribe\n");
+        // sem_post(&mutex);
+        pthread_mutex_unlock(&mutex);
+        return 0;
     }
-    sem_post(&mutex);
+    // sem_post(&mutex);
+    pthread_mutex_unlock(&mutex);
 
     return sub_id;
 }
@@ -142,7 +153,8 @@ int pubsub_subscribe(int topic_id) {
 int pubsub_cancel(int topic_id) {
     struct Topic *t = open_shm_segment(topic_id);
 
-    sem_wait(&mutex);
+    // sem_wait(&mutex);
+    pthread_mutex_lock(&mutex);
     pid_t pubsub_id = getpid();
     
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -151,7 +163,8 @@ int pubsub_cancel(int topic_id) {
             break;
         }
     }
-    sem_post(&mutex);
+    // sem_post(&mutex);
+    pthread_mutex_unlock(&mutex);
 
     return pubsub_id;
 }
@@ -187,27 +200,31 @@ int did_everyone_read(struct Topic *t) {
 int pubsub_publish(int topic_id, int msg) {
     struct Topic *t = open_shm_segment(topic_id);
 
-    sem_wait(&mutex);
+    // sem_wait(&mutex);
+    pthread_mutex_lock(&mutex);
     pid_t pub_id = getpid();
     if(!contain_pub(pub_id, t)) {
-        sem_post(&mutex);
-        perror("error pubsub_publish");
-        exit(1);
+        printf("error pubsub_publish\n");
+        // sem_post(&mutex);
+        pthread_mutex_unlock(&mutex);
+        return 0;
     }
 
     // se for atingido o limite do buffer, espera até que todo mundo tenha lido
     // a última mensagem
     if(t->msg_index % t->msg_count == 0) {
         if(!did_everyone_read(t)) {
-            sem_post(&mutex);
-            perror("buffer cheio, tente mais tarde");
-            exit(1);
+            printf("buffer cheio, tente mais tarde\n");
+            // sem_post(&mutex);
+            pthread_mutex_unlock(&mutex);
+            return 0;
         }
     }
 
     t->msg[t->msg_index % t->msg_count] = msg;
     t->msg_index++;
-    sem_post(&mutex);
+    // sem_post(&mutex);
+    pthread_mutex_unlock(&mutex);
     
     //detach from shared memory
     return close_shm_segment(t);
@@ -230,13 +247,15 @@ int getpos_sub(pid_t pid, struct Topic *t) {
 int pubsub_read(int topic_id) {
     struct Topic *t = open_shm_segment(topic_id);
 
-    sem_wait(&mutex);
+    // sem_wait(&mutex);
+    pthread_mutex_lock(&mutex);
     pid_t sub_id = getpid();
     int pos_sub = getpos_sub(sub_id, t);
     if(pos_sub == -1) {
-        sem_post(&mutex);
-        perror("error pubsub_read");
-        exit(1);
+        printf("error pubsub_read\n");
+        // sem_post(&mutex);
+        pthread_mutex_unlock(&mutex);
+        return 0;
     }
 
     int index_msg_read = t->pid_sub[pos_sub][1];
@@ -244,76 +263,78 @@ int pubsub_read(int topic_id) {
     // caso a próx mensagem ainda não tenha sido publicada, é
     // lançado um erro
     if(index_msg_read >= t->msg_index) {
-        sem_post(&mutex);
-        perror("sem novas mensagens, volte mais tarde");
-        exit(1);
+        printf("sem novas mensagens, volte mais tarde\n");
+        // sem_post(&mutex);
+        pthread_mutex_unlock(&mutex);
+        return 0;
     }
     
     int msg = t->msg[index_msg_read % t->msg_count];
     t->pid_sub[pos_sub][1]++;
-    sem_post(&mutex);
+    // sem_post(&mutex);
+    pthread_mutex_unlock(&mutex);
 
     return msg;
 }
 
-int main(void)
-{
-    pubsub_init();
-    pubsub_create_topic(15);
+// int main(void)
+// {
+//     pubsub_init();
+//     pubsub_create_topic(15);
 
-    printf("size of complete Pub struct: %zu\n", sizeof(struct Pub));
-    printf("size of single Topic struct: %zu\n", sizeof(p->tLink));
+//     printf("size of complete Pub struct: %zu\n", sizeof(struct Pub));
+//     printf("size of single Topic struct: %zu\n", sizeof(p->tLink));
 
-    struct Topic *t = open_shm_segment(15);
+//     struct Topic *t = open_shm_segment(15);
 
-    pubsub_join(15);
-    printf("pid pub %d\n", t->pid_pub[0]);
+//     pubsub_join(15);
+//     printf("pid pub %d\n", t->pid_pub[0]);
 
-    pubsub_subscribe(15);
-    printf("pid sub %d\n", t->pid_sub[0][0]);
+//     pubsub_subscribe(15);
+//     printf("pid sub %d\n", t->pid_sub[0][0]);
 
-    pubsub_publish(15, 100);
-    printf("msg published 0 %d\n", t->msg[0]);
-    pubsub_publish(15, 200);
-    printf("msg published 1 %d\n", t->msg[1]);
-    pubsub_publish(15, 300);
-    printf("msg published 2 %d\n", t->msg[2]);
+//     pubsub_publish(15, 100);
+//     printf("msg published 0 %d\n", t->msg[0]);
+//     pubsub_publish(15, 200);
+//     printf("msg published 1 %d\n", t->msg[1]);
+//     pubsub_publish(15, 300);
+//     printf("msg published 2 %d\n", t->msg[2]);
 
-    printf("msg read 0 %d\n", pubsub_read(15));
-    printf("msg read 1 %d\n", pubsub_read(15));
-    printf("msg read 2 %d\n", pubsub_read(15));
+//     printf("msg read 0 %d\n", pubsub_read(15));
+//     printf("msg read 1 %d\n", pubsub_read(15));
+//     printf("msg read 2 %d\n", pubsub_read(15));
 
-    pubsub_publish(15, 600);
-    printf("msg published 3 %d\n", t->msg[0]);
-    printf("msg read 3 %d\n", pubsub_read(15));
-    printf("msg read 4 %d\n", pubsub_read(15));
+//     pubsub_publish(15, 600);
+//     printf("msg published 3 %d\n", t->msg[0]);
+//     printf("msg read 3 %d\n", pubsub_read(15));
+//     printf("msg read 4 %d\n", pubsub_read(15));
     
 
-    // pubsub_publish(3, 200);
-    // printf("msg publish 0 %d\n", t->msg[0]);
-    // printf("msg publish 1 %d\n", t->msg[1]);
+//     // pubsub_publish(3, 200);
+//     // printf("msg publish 0 %d\n", t->msg[0]);
+//     // printf("msg publish 1 %d\n", t->msg[1]);
 
-    // printf("msg read 0 %d\n", pubsub_read(3));
-    // printf("msg read 1 %d\n", pubsub_read(3));
-    // printf("msg read 2 %d\n", pubsub_read(3));
+//     // printf("msg read 0 %d\n", pubsub_read(3));
+//     // printf("msg read 1 %d\n", pubsub_read(3));
+//     // printf("msg read 2 %d\n", pubsub_read(3));
 
-    // pubsub_join(12);
-    // printf("%d\n", t->pid_pub[0]);
+//     // pubsub_join(12);
+//     // printf("%d\n", t->pid_pub[0]);
 
-    // printf("before publish %d\n", t->msg[t->msg_index]);
-    // pubsub_publish(12, 5028); // escreve no topico 11 criado anterior mente a msg 5028
-    // printf("after publish %d\n", t->msg[t->msg_index - 1]);
+//     // printf("before publish %d\n", t->msg[t->msg_index]);
+//     // pubsub_publish(12, 5028); // escreve no topico 11 criado anterior mente a msg 5028
+//     // printf("after publish %d\n", t->msg[t->msg_index - 1]);
 
-    // pubsub_cancel(12);
-    // printf("before publish %d\n", t->msg[t->msg_index]);
-    // pubsub_publish(12, 666); // escreve no topico 11 criado anterior mente a msg 5028
-    // printf("after publish %d\n", t->msg[t->msg_index - 1]);
+//     // pubsub_cancel(12);
+//     // printf("before publish %d\n", t->msg[t->msg_index]);
+//     // pubsub_publish(12, 666); // escreve no topico 11 criado anterior mente a msg 5028
+//     // printf("after publish %d\n", t->msg[t->msg_index - 1]);
 
-    // pubsub_publish(12, 3000);
-    // pubsub_publish(12, 4666);
-    // printf("after publish %d\n", t->msg[1]);
-    // printf("after publish %d\n", t->msg[2]);
-    // printf("%d", destroy_shm_segment(11)); // se nao quiser excluir so usar o metodo close_shm_segment() que as infos ficam salvas;
+//     // pubsub_publish(12, 3000);
+//     // pubsub_publish(12, 4666);
+//     // printf("after publish %d\n", t->msg[1]);
+//     // printf("after publish %d\n", t->msg[2]);
+//     // printf("%d", destroy_shm_segment(11)); // se nao quiser excluir so usar o metodo close_shm_segment() que as infos ficam salvas;
   
-  return 0;
-}
+//   return 0;
+// }
