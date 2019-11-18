@@ -15,7 +15,8 @@ int main(void) {
         printf("4- Subscribe um tópico\n");
         printf("5- Publish\n");
         printf("6- Read\n");
-        printf("7- Sair\n");
+        printf("7- Cancelar subscrição\n");
+        printf("8- Sair\n");
         scanf("%d", &opcao);
 
         int id;
@@ -39,7 +40,8 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             pubsub_join(id);
-            printf("pub pid: %d\n", t->pid_pub[0]);
+            printf("pub pid 0: %d\n", t->pid_pub[0]);
+            printf("pub pid 1: %d\n", t->pid_pub[1]);
             break;
         case 4:
             printf("Digite o id do tópico\n");
@@ -47,7 +49,8 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             pubsub_subscribe(id);
-            printf("sub pid: %d\n", t->pid_sub[0][0]);
+            printf("sub pid 0: %d\n", t->pid_sub[0][0]);
+            printf("sub pid 1: %d\n", t->pid_sub[1][0]);
             break;
         case 5:
             printf("Digite o id do tópico e a mensagem\n");
@@ -55,7 +58,7 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             pubsub_publish(id, msg);
-            printf("mensagem publicada: %d\n", t->msg[t->msg_index - 1]);
+            printf("mensagem publicada: %d\n", t->msg[(t->msg_index % t->msg_count) - 1]);
             break;
         case 6:
             printf("Digite o id do tópico\n");
@@ -63,6 +66,15 @@ int main(void) {
             t = open_shm_segment(id);
             printf("shmid do tópico: %d\n", get_shmid_segment(id));
             printf("mensagem lida: %d\n", pubsub_read(id));
+            break;
+        case 7:
+            printf("Digite o id do tópico\n");
+            scanf("%d", &id);
+            t = open_shm_segment(id);
+            printf("shmid do tópico: %d\n", get_shmid_segment(id));
+            pubsub_cancel(id);
+            printf("sub pid 0: %d\n", t->pid_sub[0][0]);
+            printf("sub pid 1: %d\n", t->pid_sub[1][0]);
             break;
         default:
             return 0;
