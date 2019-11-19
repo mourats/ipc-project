@@ -1,5 +1,4 @@
 extern int pubsub_init();
-extern struct Topic * open_shm_segment(int topic_id);
 extern int pubsub_create_topic(int topic_id);
 extern int pubsub_join(int topic_id);
 extern int pubsub_subscribe(int topic_id);

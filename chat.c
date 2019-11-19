@@ -30,37 +30,28 @@ int main(void) {
         int id;
         int msg;
         int pos;
-        struct Topic * t;
         switch (opcao)
         {
         case 0:
             options();
             break;
         case 1: // inicia pub
-            pubsub_init(); // aqui é onde devemos printar o id do segmento
+            pubsub_init();
             break;
         case 2: // cria topico
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
             pubsub_create_topic(id);
-            t = open_shm_segment(id);
-            printf("shmid do tópico criado: %d\n", get_shmid_segment(id));
             break;
         case 3: // join topico
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
-            t = open_shm_segment(id);
             pubsub_join(id);
-            pos = getpos_pub(getpid(), t);
-            printf("pub pid: %d\n", t->pid_pub[pos]);
             break;
         case 4: // se inscreve no topico
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
-            t = open_shm_segment(id);
             pubsub_subscribe(id);
-            pos = getpos_sub(getpid(), t);
-            printf("sub pid: %d\n", t->pid_sub[pos][0]);
             break;
         case 5: // publica nova mensagem
             printf("Digite o id do tópico e a mensagem: ");
@@ -75,12 +66,7 @@ int main(void) {
         case 7: // cancelar subscricao
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
-            t = open_shm_segment(id);
-            printf("shmid do tópico: %d\n", get_shmid_segment(id));
-            pos = getpos_sub(getpid(), t);
-            printf("sub pid antes: %d\n", t->pid_sub[pos][0]);
             pubsub_cancel(id);
-            printf("sub pid depois: %d\n", t->pid_sub[pos][0]);
             break;
         default:
             return 0;
