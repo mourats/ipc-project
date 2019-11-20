@@ -9,7 +9,7 @@ struct Topic {
     int pubs_subs_count; // publishers and subscribers size
     int pid_pub[50]; // size max of publishers 
     int pid_sub[50][2]; // size max of subscribers and flag read
-    int msg_count; // count max of messages
+    int msg_count; // messages counter
     int msg[3]; // array of messages
     int msg_index; // index of end of messages on array
 };
