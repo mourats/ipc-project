@@ -87,7 +87,7 @@ void fill_pids(struct Topic *t) {
 }
 
 int array_is_full(struct Pub * pub) {
-    if (pub->topics_cont > 0 && pub->topics_cont == sizeof pub->topics / sizeof pub->topics[0])
+    if (pub->topics_count > 0 && pub->topics_count == sizeof pub->topics / sizeof pub->topics[0])
         return 1;
     return 0;
 }
