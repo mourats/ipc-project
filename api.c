@@ -246,7 +246,7 @@ int pubsub_publish(int topic_id, int msg) {
     }
 
     t->msg[t->msg_index % t->msg_count] = msg;
-    int mensagem_retorno = t->msg[t->msg_index];
+    int mensagem_retorno = t->msg[t->msg_index % t->msg_count];
     t->msg_index++;
     
     pthread_mutex_unlock(&mutex);
