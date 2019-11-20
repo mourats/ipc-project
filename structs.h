@@ -2,18 +2,20 @@
 #include <stdlib.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h> 
+#include <sys/types.h>
 
 struct Topic {
     int id;
-    int pubs_count; // publishers number
-    int subs_count; // subscribers number
-    int pid[50]; // size max of publishers + subscribers
-    int msg[100]; // size max of messages
-    int id_index; // index of head messages on array
+    int pubs_subs_count; // publishers and subscribers size
+    int pid_pub[50]; // size max of publishers 
+    int pid_sub[50][2]; // size max of subscribers
+    int msg_count; // count max of messages
+    int msg[3]; // size max of messages
     int msg_index; // index of end of messages on array
 };
 
 struct Pub {
-    int id;
-    struct Topic *tLink; // linked list to dinamyc size of different topics
+    int topics[20];
+    int topics_cont;
+    int pos_topic;
 };
