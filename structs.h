@@ -12,6 +12,8 @@ struct Topic {
     int msg_count; // messages counter
     int msg[3]; // array of messages
     int msg_index; // index of end of messages on array
+    int querem_ler;
+    int querem_escrever;
 };
 
 struct Pub {
@@ -19,3 +21,21 @@ struct Pub {
     int topics_count; // topics counter
     int pos_topic; // free topic index
 };
+
+union {
+    int val;
+    struct semid_ds *buf;
+    unsigned short int array[1];
+} arg_mut;
+
+union {
+    int val;
+    struct semid_ds *buf;
+    unsigned short int array[1];
+} arg_cond_read;
+
+union {
+    int val;
+    struct semid_ds *buf;
+    unsigned short int array[1];
+} arg_cond_pub;

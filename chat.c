@@ -2,8 +2,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include "structs.h"
 #include "api.h"
+
+void sighandler(int signum) {
+    pubsub_cancel_semid();
+    printf("\nSaindo do tópico, tchau...\n");
+    exit(1);
+}
 
 int options() {
     printf("======= Opções: =======\n");
@@ -21,6 +28,7 @@ int options() {
 }
 
 int main(void) {
+    signal(SIGINT, sighandler);
     options();
     while(1) {
         int opcao;        
