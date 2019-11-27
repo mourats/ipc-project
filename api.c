@@ -337,6 +337,31 @@ int pubsub_cancel(int topic_id) {
     return pubsub_id;
 }
 
+int contain_sub(pid_t pid, struct Topic *t) {
+    int contain = FALSE;
+    for(int i = 0; i < t->pubs_subs_count; i++) {
+        if(t->pid_sub[i][0] == pid) {
+            contain = TRUE;
+            break;
+        }
+    }
+
+    return contain;
+}
+
+int pubsub_cancel_semid() {
+    struct Pub *pub = pub_open_shm_segment();
+    pid_t sub_id = getpid();
+
+    for(int i = 0; i < sizeof pub->topics; i++) {
+        struct Topic *t = topic_open_shm_segment(pub->topics[i]);
+        if(contain_sub(sub_id, t)) {
+            pubsub_cancel(pub->topics[i]);
+            break;
+        }
+    }
+}
+
 int contain_pub(pid_t pid, struct Topic *t) {
     int contain = FALSE;
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -492,7 +517,7 @@ int pubsub_read(int topic_id) {
     } else {
         printf("O valor do semáforo é %d\n", semval);
     }
-    
+
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
 
