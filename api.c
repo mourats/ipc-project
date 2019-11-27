@@ -3,14 +3,27 @@
 #include <unistd.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h>
-#include <pthread.h>
+// #include <pthread.h>
+#include <sys/sem.h>
 #include "structs.h"
 
 #define TRUE 1
 #define FALSE 0
 #define PUB_KEY 51
+#define SEM_KEY 666
 
-pthread_mutex_t mutex;
+// pthread_mutex_t mutex;
+int semid;
+int semval;
+struct sembuf mutex;
+char *path_sem = "arquivo";
+char *path_mem = "shmfile";
+
+union {
+    int val;
+    struct semid_ds *buf;
+    unsigned short int array[1];
+} arg;
 
 // GENERAL FUNCTIONS TO SEGMENT
 key_t get_ftok(int key) {
@@ -49,6 +62,27 @@ int pub_close_shm_segment(struct Pub *pub) {
     return shmdt(pub);
 }
 
+int open_semaforo() {
+    int sem_id;
+    if((sem_id = semget(ftok(path_sem, (key_t)SEM_KEY), 1, 0)) == -1) {
+        perror("erro ao tentar abrir semáforo");
+        exit(1);
+    }
+    printf("abrindo o semáforo %d\n", sem_id);
+
+    return sem_id;
+}
+
+void atualiza_semaforo(int sem_op) {
+    mutex.sem_num = 0;
+    mutex.sem_op = sem_op;
+    mutex.sem_flg = SEM_UNDO;
+    if(semop(semid, &mutex, 1) == -1) {
+        perror("operação de decremento no semáforo não realizada");
+        exit(1);
+    }
+}
+
 // TOPIC OPEN SEGMENT
 struct Topic * topic_open_shm_segment(int key) {
     int shm_id = shmget(key, sizeof(struct Topic), 0666 | IPC_CREAT);
@@ -74,6 +108,26 @@ int pubsub_init() {
     struct Pub *pub = pub_open_shm_segment();
     printf("Segmento de memoria numero: %d\n", get_shmid_segment(PUB_KEY));
     fill_topics(pub);
+
+    if((semid = semget(ftok(path_sem, (key_t)SEM_KEY), 1, IPC_CREAT|0666)) == -1) {
+        perror("Impossível criar semáforo");
+        exit(1);
+    }
+    printf("Criado o semáforo com %d\n", semid);
+
+    arg.val = 1; //colocando 1 no semáforo
+    if(semctl(semid, 0, SETVAL, arg) == -1) {
+        perror("erro semctl SETVAL");
+        exit(1);
+    }
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pub_close_shm_segment(pub);
     return 0;
 }
@@ -93,7 +147,7 @@ int array_is_full(struct Pub * pub) {
 }
 
 int pubsub_create_topic(int topic_id) {
-    pthread_mutex_init(&mutex, NULL);
+    // pthread_mutex_init(&mutex, NULL);
     struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
 
@@ -115,10 +169,27 @@ int pubsub_create_topic(int topic_id) {
 int pubsub_join(int topic_id) {
     struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
+    semid = open_semaforo();
 
     if (t == NULL) return -1;
 
-    pthread_mutex_lock(&mutex);
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
+    //demanda de recurso
+    atualiza_semaforo(-1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pid_t pub_id = getpid();
     
     int fit = FALSE;
@@ -132,11 +203,28 @@ int pubsub_join(int topic_id) {
 
     if(!fit) {
         printf("erro pubsub_join\n");
-        pthread_mutex_unlock(&mutex);
+        //liberando o recurso
+        atualiza_semaforo(1);
+
+        if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+            perror("erro semctl GETVAL");
+            exit(1);
+        } else {
+            printf("O valor do semáforo é %d\n", semval);
+        }
         return 0;
     }
     
-    pthread_mutex_unlock(&mutex);
+    //liberando o recurso
+    atualiza_semaforo(1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
 
@@ -147,7 +235,25 @@ int pubsub_subscribe(int topic_id) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
 
-    pthread_mutex_lock(&mutex);
+    semid = open_semaforo();
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
+    //decrementando do semáforo
+    atualiza_semaforo(-1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pid_t sub_id = getpid();
     int fit = FALSE;
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -161,11 +267,29 @@ int pubsub_subscribe(int topic_id) {
 
     if(!fit) {
         printf("error pubsub_subscribe\n");
-        pthread_mutex_unlock(&mutex);
+        //liberando o recurso
+        atualiza_semaforo(1);
+
+        if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+            perror("erro semctl GETVAL");
+            exit(1);
+        } else {
+            printf("O valor do semáforo é %d\n", semval);
+        }
+
         return 0;
     }
     
-    pthread_mutex_unlock(&mutex);
+    //liberando o recurso
+    atualiza_semaforo(1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
 
@@ -177,8 +301,17 @@ int pubsub_subscribe(int topic_id) {
 int pubsub_cancel(int topic_id) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
+    open_semaforo();
 
-    pthread_mutex_lock(&mutex);
+    //demanda de recurso do semáforo
+    atualiza_semaforo(-1);
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pid_t pubsub_id = getpid();
     
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -188,7 +321,16 @@ int pubsub_cancel(int topic_id) {
         }
     }
     
-    pthread_mutex_unlock(&mutex);
+    //libera o semáforo
+    atualiza_semaforo(1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
 
@@ -226,30 +368,49 @@ int did_everyone_read(struct Topic *t) {
 int pubsub_publish(int topic_id, int msg) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
+    open_semaforo();
+    
+    //lock
+    atualiza_semaforo(-1);
 
-    pthread_mutex_lock(&mutex);
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pid_t pub_id = getpid();
     if(!contain_pub(pub_id, t)) {
         printf("error pubsub_publish\n");
-        pthread_mutex_unlock(&mutex);
+        //unlock
+        atualiza_semaforo(1);
         return 0;
     }
 
     // se for atingido o limite do buffer, espera até que todo mundo tenha lido
     // a última mensagem
-    if(t->msg_index % t->msg_count == 0) {
-        if(!did_everyone_read(t)) {
-            printf("buffer cheio, tente mais tarde\n");
-            pthread_mutex_unlock(&mutex);
-            return 0;
-        }
+    if(t->msg_index % t->msg_count == 0 && !did_everyone_read(t)) {
+        printf("buffer cheio, tente mais tarde\n");
+        //unlock
+        atualiza_semaforo(1);
+        return 0;
     }
 
     t->msg[t->msg_index % t->msg_count] = msg;
     int mensagem_retorno = t->msg[t->msg_index % t->msg_count];
     t->msg_index++;
     
-    pthread_mutex_unlock(&mutex);
+    //unlock
+    atualiza_semaforo(1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
 
@@ -287,14 +448,24 @@ int getpos_sub(pid_t pid, struct Topic *t) {
 int pubsub_read(int topic_id) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
+    open_semaforo();
 
-    pthread_mutex_lock(&mutex);
+    //lock
+    atualiza_semaforo(-1);
+
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+
     pid_t sub_id = getpid();
     int pos_sub = getpos_sub(sub_id, t);
     if(pos_sub == -1) {
         printf("error pubsub_read\n");
-        // sem_post(&mutex);
-        pthread_mutex_unlock(&mutex);
+        //unlock
+        atualiza_semaforo(1);
         return 0;
     }
 
@@ -304,14 +475,24 @@ int pubsub_read(int topic_id) {
     // lançado um erro
     if(index_msg_read >= t->msg_index) {
         printf("sem novas mensagens, volte mais tarde\n");
-        pthread_mutex_unlock(&mutex);
+        //unlock
+        atualiza_semaforo(1);
         return 0;
     }
     
     int msg = t->msg[index_msg_read % t->msg_count];
     t->pid_sub[pos_sub][1]++;
-    pthread_mutex_unlock(&mutex);
+    
+    //unlock
+    atualiza_semaforo(1);
 
+    if((semval = semctl(semid, 0, GETVAL, arg)) == -1) {
+        perror("erro semctl GETVAL");
+        exit(1);
+    } else {
+        printf("O valor do semáforo é %d\n", semval);
+    }
+    
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
 
