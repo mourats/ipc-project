@@ -12,6 +12,7 @@ struct Topic {
     int msg_count; // messages counter
     int msg[3]; // array of messages
     int msg_index; // index of end of messages on array
+    int querem_ler;
 };
 
 struct Pub {
