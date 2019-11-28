@@ -13,21 +13,19 @@
 #define COND_READ_KEY 999
 #define COND_PUB_KEY 696
 
-// pthread_mutex_t mutex;
 int semid_mut, semid_cond_read, semid_cond_pub;
 
 int semval;
 
 struct sembuf mutex, cond_read, cond_pub;
 
-char *path_mut = "arquivo";
-char *path_cond_read = "arquivo2";
-char *path_cond_pub = "arquivo3";
-// char *path_mem = "shmfile";
+char *path_mut = "files/file_shm_mutex";
+char *path_cond_read = "files/file_shm_cond_read";
+char *path_cond_pub = "files/file_shm_cond_pub";   
 
 key_t get_ftok(int key) {
-    char const *path = "shmfile";
-    return ftok("shmfile", key);
+    char const *path = "files/shmfile";
+    return ftok(path, key);
 }
 
 int get_shmid_segment(int key) {
@@ -443,4 +441,20 @@ int pubsub_read(int topic_id) {
     topic_close_shm_segment(t);
 
     return msg;
+}
+
+char* pubsub_list_topics(){
+    struct Pub *pub = pub_open_shm_segment();
+    int topicInt;
+    int flag = 1;
+    printf("Lista de tópicos: \n");
+    for(int i = 0; i < sizeof pub->topics; i++){
+        topicInt = pub->topics[i];
+        if(topicInt != -1) {
+            printf("%d %s", topicInt, "\n");
+            flag = 0;
+        }
+    }
+    if(flag)
+        printf("Nenhum tópico encontrado. \n");
 }
