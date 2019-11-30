@@ -8,20 +8,7 @@
 
 #define TRUE 1
 #define FALSE 0
-#define PUB_KEY 52
-#define MUT_KEY 666
-#define COND_READ_KEY 999
-#define COND_PUB_KEY 696
-
-int semid_mut, semid_cond_read, semid_cond_pub;
-
-int semval;
-
-struct sembuf mutex, cond_read, cond_pub;
-
-char *path_mut = "files/file_shm_mutex";
-char *path_cond_read = "files/file_shm_cond_read";
-char *path_cond_pub = "files/file_shm_cond_pub";   
+#define PUB_KEY 52  
 
 key_t get_ftok(int key) {
     char const *path = "files/shmfile";
@@ -44,7 +31,6 @@ int destroy_shm_segment(int topic_id) {
     return shmctl(shm, IPC_RMID, NULL);
 }
 
-// PUB OPEN SEGMENT
 struct Pub * pub_open_shm_segment() {
     int shm_id = shmget(get_ftok(PUB_KEY), sizeof(struct Pub), 0666 | IPC_CREAT);
     if (shm_id == -1) {
@@ -81,7 +67,7 @@ void atualiza_semaforo(int sem_op, int semid, struct sembuf sem) {
 }
 
 struct Topic * topic_open_shm_segment(int key) {
-    int shm_id = shmget(key, sizeof(struct Topic), 0666 | IPC_CREAT);
+    int shm_id = shmget(key, sizeof(struct Topic), 0666|IPC_CREAT);
     if (shm_id == -1) {
         perror("Erro shmget() topic");
         exit(1);
@@ -94,7 +80,6 @@ int topic_close_shm_segment(struct Topic *topic) {
     return shmdt(topic);
 }
 
-// API
 void fill_topics(struct Pub *p) {
     for(int i = 0; i < sizeof p->topics; i++)
         p->topics[i] =  -1;
@@ -103,28 +88,7 @@ void fill_topics(struct Pub *p) {
 int pubsub_init() {
     struct Pub *pub = pub_open_shm_segment();
     printf("Segmento de memoria numero: %d\n", get_shmid_segment(PUB_KEY));
-    semid_mut = open_semaforo(MUT_KEY, path_mut);
-    semid_cond_read = open_semaforo(COND_READ_KEY, path_cond_read);
-    semid_cond_pub = open_semaforo(COND_PUB_KEY, path_cond_pub);
     fill_topics(pub);
-
-    arg_mut.val = 1; //colocando 1 no semáforo
-    if(semctl(semid_mut, 0, SETVAL, arg_mut) == -1) {
-        perror("erro semctl SETVAL");
-        exit(1);
-    }
-
-    arg_cond_read.val = 0; //colocando 0 na condicional
-    if(semctl(semid_cond_read, 0, SETVAL, arg_cond_read) == -1) {
-        perror("erro semctl SETVAL");
-        exit(1);
-    }
-
-    arg_cond_pub.val = 0; //colacando 0 no semáforo condicional
-    if(semctl(semid_cond_pub, 0, SETVAL, arg_cond_pub) == -1) {
-        perror("erro semctl SETVAL");
-        exit(1);
-    }
 
     pub_close_shm_segment(pub);
     return 0;
@@ -145,7 +109,6 @@ int array_is_full(struct Pub * pub) {
 }
 
 int pubsub_create_topic(int topic_id) {
-    // pthread_mutex_init(&mutex, NULL);
     struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
 
@@ -158,6 +121,27 @@ int pubsub_create_topic(int topic_id) {
     t->querem_ler = 0;
     t->querem_escrever = 0;
     fill_pids(t);
+    t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
+    t->semid_cond_read = open_semaforo(topic_id, "files/file_shm_cond_read");
+    t->semid_cond_pub = open_semaforo(topic_id, "files/file_shm_cond_pub");
+
+    t->arg_mut.val = 1;
+    if(semctl(t->semid_mut, 0, SETVAL, t->arg_mut) == -1) {
+        perror("erro semctl SETVAL 0");
+        exit(1);
+    }
+
+    t->arg_cond_read.val = 0;
+    if(semctl(t->semid_cond_read, 0, SETVAL, t->arg_cond_read) == -1) {
+        perror("erro semctl SETVAL 1");
+        exit(1);
+    }
+
+    t->arg_cond_pub.val = 0;
+    if(semctl(t->semid_cond_pub, 0, SETVAL, t->arg_cond_pub) == -1) {
+        perror("erro semctl SETVAL 2");
+        exit(1);
+    }
 
     pub->topics[pub->pos_topic] = t->id;
     pub->pos_topic++;
@@ -193,11 +177,11 @@ int contain_pub(pid_t pid, struct Topic *t) {
 int pubsub_join(int topic_id) {
     struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
-    semid_mut = open_semaforo(MUT_KEY, path_mut);
+    t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
     if (t == NULL) return -1;
 
-    atualiza_semaforo(-1, semid_mut, mutex);
+    atualiza_semaforo(-1, t->semid_mut, t->mutex);
 
     pid_t pub_id = getpid();
    
@@ -212,11 +196,11 @@ int pubsub_join(int topic_id) {
 
     if(!fit) {
         printf("erro pubsub_join\n");
-        atualiza_semaforo(1, semid_mut, mutex);
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
         return 0;
     }
     
-    atualiza_semaforo(1, semid_mut, mutex);
+    atualiza_semaforo(1, t->semid_mut, t->mutex);
 
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
@@ -228,9 +212,9 @@ int pubsub_subscribe(int topic_id) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
 
-    semid_mut = open_semaforo(MUT_KEY, path_mut);
+    t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
-    atualiza_semaforo(-1, semid_mut, mutex);
+    atualiza_semaforo(-1, t->semid_mut, t->mutex);
 
     pid_t sub_id = getpid();
 
@@ -246,11 +230,11 @@ int pubsub_subscribe(int topic_id) {
 
     if(!fit) {
         printf("error pubsub_subscribe\n");
-        atualiza_semaforo(1, semid_mut, mutex);
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
         return 0;
     }
     
-    atualiza_semaforo(1, semid_mut, mutex);
+    atualiza_semaforo(1, t->semid_mut, t->mutex);
 
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
@@ -261,9 +245,9 @@ int pubsub_subscribe(int topic_id) {
 int pubsub_cancel(int topic_id) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
-    semid_mut = open_semaforo(MUT_KEY, path_mut);
+    t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
-    atualiza_semaforo(-1, semid_mut, mutex);
+    atualiza_semaforo(-1, t->semid_mut, t->mutex);
 
     pid_t pubsub_id = getpid();
     
@@ -283,7 +267,7 @@ int pubsub_cancel(int topic_id) {
         }
     }
     
-    atualiza_semaforo(1, semid_mut, mutex);
+    atualiza_semaforo(1, t->semid_mut, t->mutex);
 
     pub_close_shm_segment(pub);
     topic_close_shm_segment(t);
@@ -319,27 +303,27 @@ int did_everyone_read(struct Topic *t) {
 int pubsub_publish(int topic_id, int msg) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
-    semid_mut = open_semaforo(MUT_KEY, path_mut);
-    semid_cond_read =  open_semaforo(COND_READ_KEY, path_cond_read);
-    semid_cond_pub = open_semaforo(COND_PUB_KEY, path_cond_pub);
+    t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
+    t->semid_cond_read =  open_semaforo(topic_id, "files/file_shm_cond_read");
+    t->semid_cond_pub =  open_semaforo(topic_id, "files/file_shm_cond_pub");
     
     //lock
-    atualiza_semaforo(-1, semid_mut, mutex);
+    atualiza_semaforo(-1, t->semid_mut, t->mutex);
 
     pid_t pub_id = getpid();
     if(!contain_pub(pub_id, t)) {
         printf("error pubsub_publish\n");
         //unlock
-        atualiza_semaforo(1, semid_mut, mutex);
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
         return 0;
     }
 
     if(t->msg_index % t->msg_count == 0 && !did_everyone_read(t)) {
-        atualiza_semaforo(1, semid_mut, mutex);
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
         printf("buffer cheio\n");
         t->querem_escrever++;
-        atualiza_semaforo(-1, semid_cond_pub, cond_pub);
-        atualiza_semaforo(-1, semid_mut, mutex);
+        atualiza_semaforo(-1, t->semid_cond_pub, t->cond_pub);
+        atualiza_semaforo(-1, t->semid_mut, t->mutex);
     }
 
     t->msg[t->msg_index % t->msg_count] = msg;
@@ -347,14 +331,15 @@ int pubsub_publish(int topic_id, int msg) {
     t->msg_index++;
     
     //unlock
-    atualiza_semaforo(1, semid_mut, mutex);
+    atualiza_semaforo(1, t->semid_mut, t->mutex);
 
+    printf("querem ler %d\n", t->querem_ler);
     if(t->querem_ler > 0) {
-        atualiza_semaforo(t->querem_ler, semid_cond_read, cond_read);
+        atualiza_semaforo(t->querem_ler, t->semid_cond_read, t->cond_read);
 
         t->querem_ler = 0;
-        arg_cond_read.val = 0;
-        if(semctl(semid_cond_read, 0, SETVAL, arg_cond_read) == -1) {
+        t->arg_cond_read.val = 0;
+        if(semctl(t->semid_cond_read, 0, SETVAL, t->arg_cond_read) == -1) {
             perror("erro semctl SETVAL");
             exit(1);
         }
@@ -393,48 +378,48 @@ int getpos_sub(pid_t pid, struct Topic *t) {
 int pubsub_read(int topic_id) {
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
-    semid_mut = open_semaforo(MUT_KEY, path_mut);
-    semid_cond_read = open_semaforo(COND_READ_KEY, path_cond_read);
-    semid_cond_pub = open_semaforo(COND_PUB_KEY, path_cond_pub);
+    t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
+    t->semid_cond_read =  open_semaforo(topic_id, "files/file_shm_cond_read");
+    t->semid_cond_pub =  open_semaforo(topic_id, "files/file_shm_cond_pub");
 
     //lock
-    atualiza_semaforo(-1, semid_mut, mutex);
+    atualiza_semaforo(-1, t->semid_mut, t->mutex);
 
     pid_t sub_id = getpid();
     int pos_sub = getpos_sub(sub_id, t);
     if(pos_sub == -1) {
         printf("error pubsub_read\n");
         //unlock
-        atualiza_semaforo(1, semid_mut, mutex);
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
         return 0;
     }
 
     int index_msg_read = t->pid_sub[pos_sub][1];
 
     while(index_msg_read >= t->msg_index) {
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
         printf("sem mensagens\n");
-        //unlock
-        atualiza_semaforo(1, semid_mut, mutex);
         t->querem_ler++;
-        atualiza_semaforo(-1, semid_cond_read, cond_read);
-        atualiza_semaforo(-1, semid_mut, mutex);
+        atualiza_semaforo(-1, t->semid_cond_read, t->cond_read);
+        atualiza_semaforo(-1, t->semid_mut, t->mutex);
     }
     
     int msg = t->msg[index_msg_read % t->msg_count];
     t->pid_sub[pos_sub][1]++;
     
     //unlock
-    atualiza_semaforo(1, semid_mut, mutex);
+    atualiza_semaforo(1, t->semid_mut, t->mutex);
 
     if(did_everyone_read(t) && t->querem_escrever > 0) {
-        atualiza_semaforo(t->querem_escrever, semid_cond_pub, cond_pub);
+        atualiza_semaforo(t->querem_escrever, t->semid_cond_pub, t->cond_pub);
 
         t->querem_escrever = 0;
-        arg_cond_pub.val = 0;
-        if(semctl(semid_cond_pub, 0, SETVAL, arg_cond_pub) == -1) {
+        t->arg_cond_pub.val = 0;
+        if(semctl(t->semid_cond_pub, 0, SETVAL, t->arg_cond_pub) == -1) {
             perror("erro semctl SETVAL");
             exit(1);
         }
+        return msg;
     }
 
     pub_close_shm_segment(pub);

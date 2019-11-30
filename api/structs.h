@@ -2,7 +2,14 @@
 #include <stdlib.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h> 
+#include <sys/sem.h>
 #include <sys/types.h>
+
+union semun {
+    int val;
+    struct semid_ds *buf;
+    unsigned short int array[1];
+};
 
 struct Topic {
     int id;
@@ -14,6 +21,9 @@ struct Topic {
     int msg_index; // index of end of messages on array
     int querem_ler;
     int querem_escrever;
+    int semid_mut, semid_cond_read, semid_cond_pub, semval;
+    struct sembuf mutex, cond_read, cond_pub;
+    union semun arg_mut, arg_cond_read, arg_cond_pub;
 };
 
 struct Pub {
@@ -21,21 +31,3 @@ struct Pub {
     int topics_count; // topics counter
     int pos_topic; // free topic index
 };
-
-union {
-    int val;
-    struct semid_ds *buf;
-    unsigned short int array[1];
-} arg_mut;
-
-union {
-    int val;
-    struct semid_ds *buf;
-    unsigned short int array[1];
-} arg_cond_read;
-
-union {
-    int val;
-    struct semid_ds *buf;
-    unsigned short int array[1];
-} arg_cond_pub;
