@@ -13,7 +13,7 @@ void sighandler(int signum) {
 
 int options() {
     printf("======= Opções: =======\n");
-    printf("0- Imprimir opções\n");
+    printf("0- Iniciar Pub\n");
     printf("1- Listar tópicos\n");
     printf("2- Criar tópico\n");
     printf("3- Join um tópico\n");
@@ -27,7 +27,7 @@ int options() {
 }
 
 int main(void) {
-    pubsub_init();
+    // pubsub_init();
     signal(SIGINT, sighandler);
     options();
     while(1) {
@@ -41,7 +41,7 @@ int main(void) {
         switch (opcao)
         {
         case 0:
-            options();
+            pubsub_init();
             break;
         case 1: // listar topicos
             pubsub_list_topics();

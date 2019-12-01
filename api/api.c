@@ -66,6 +66,20 @@ void atualiza_semaforo(int sem_op, int semid, struct sembuf sem) {
     }
 }
 
+int contain_topic(int topic_id) {
+    int contain = FALSE;
+    struct Pub* pub = pub_open_shm_segment();
+
+    for(int i = 0; i < sizeof pub->topics; i++) {
+        if(pub->topics[i] == topic_id) {
+            contain = TRUE;
+            break;
+        }
+    }
+
+    return contain;
+}
+
 struct Topic * topic_open_shm_segment(int key) {
     int shm_id = shmget(key, sizeof(struct Topic), 0666|IPC_CREAT);
     if (shm_id == -1) {
@@ -89,6 +103,7 @@ int pubsub_init() {
     struct Pub *pub = pub_open_shm_segment();
     printf("Segmento de memoria numero: %d\n", get_shmid_segment(PUB_KEY));
     fill_topics(pub);
+    pub->pos_topic = 0;
 
     pub_close_shm_segment(pub);
     return 0;
@@ -109,6 +124,11 @@ int array_is_full(struct Pub * pub) {
 }
 
 int pubsub_create_topic(int topic_id) {
+    if(contain_topic(topic_id)) {
+        perror("Tópico já existe");
+        return 0;
+    }
+
     struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
 
@@ -174,7 +194,30 @@ int contain_pub(pid_t pid, struct Topic *t) {
     return contain;
 }
 
+int valida_topico(int topic_id) {
+    if(!contain_topic(topic_id)) {
+        perror("Tópico não existe");
+        exit(1);
+    }
+}
+
+int existe_em_topico(pid_t pid, int topic_id) {
+    struct Pub *pub = pub_open_shm_segment();
+    int existe = FALSE;
+
+    for(int i = 0; i < sizeof pub->topics; i++) {
+        struct Topic *t = topic_open_shm_segment(pub->topics[i]);
+        if(contain_pub(pid, t) | contain_sub(pid, t)) {
+            existe = TRUE;
+            break;
+        }
+    }
+
+    return existe;
+}
+
 int pubsub_join(int topic_id) {
+    valida_topico(topic_id);
     struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
@@ -182,9 +225,14 @@ int pubsub_join(int topic_id) {
     if (t == NULL) return -1;
 
     atualiza_semaforo(-1, t->semid_mut, t->mutex);
-
     pid_t pub_id = getpid();
    
+    if(existe_em_topico(pub_id, topic_id)) {
+        perror("Estais em um tópico");
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
+        return 0;
+    }
+
     int fit = FALSE;
     for(int i = 0; i < t->pubs_subs_count; i++) {
         if(t->pid_pub[i] == -1) {
@@ -195,7 +243,7 @@ int pubsub_join(int topic_id) {
     }
 
     if(!fit) {
-        printf("erro pubsub_join\n");
+        perror("erro pubsub_join");
         atualiza_semaforo(1, t->semid_mut, t->mutex);
         return 0;
     }
@@ -209,14 +257,19 @@ int pubsub_join(int topic_id) {
 }
 
 int pubsub_subscribe(int topic_id) {
+    valida_topico(topic_id);
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
-
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
     atualiza_semaforo(-1, t->semid_mut, t->mutex);
-
     pid_t sub_id = getpid();
+
+    if(existe_em_topico(sub_id, topic_id)) {
+        perror("Estais em um tópico");
+        atualiza_semaforo(1, t->semid_mut, t->mutex);
+        return 0;
+    }
 
     int fit = FALSE;
     for(int i = 0; i < t->pubs_subs_count; i++) {
@@ -243,6 +296,7 @@ int pubsub_subscribe(int topic_id) {
 }
 
 int pubsub_cancel(int topic_id) {
+    valida_topico(topic_id);
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
@@ -301,6 +355,7 @@ int did_everyone_read(struct Topic *t) {
 }
 
 int pubsub_publish(int topic_id, int msg) {
+    valida_topico(topic_id);
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
@@ -376,6 +431,7 @@ int getpos_sub(pid_t pid, struct Topic *t) {
 }
 
 int pubsub_read(int topic_id) {
+    valida_topico(topic_id);
     struct Pub *pub = pub_open_shm_segment(topic_id);
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
