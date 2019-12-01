@@ -70,7 +70,7 @@ int contain_topic(int topic_id) {
     int contain = FALSE;
     struct Pub* pub = pub_open_shm_segment();
 
-    for(int i = 0; i < sizeof pub->topics; i++) {
+    for(int i = 0; i < sizeof pub->topics / sizeof *pub->topics; i++) {
         if(pub->topics[i] == topic_id) {
             contain = TRUE;
             break;
@@ -197,6 +197,7 @@ int contain_pub(pid_t pid, struct Topic *t) {
 int valida_topico(int topic_id) {
     if(!contain_topic(topic_id)) {
         perror("Tópico não existe");
+        // pubsub_cancel(topic_id);
         exit(1);
     }
 }
@@ -205,7 +206,7 @@ int existe_em_topico(pid_t pid, int topic_id) {
     struct Pub *pub = pub_open_shm_segment();
     int existe = FALSE;
 
-    for(int i = 0; i < sizeof pub->topics; i++) {
+    for(int i = 0; i < sizeof pub->topics / sizeof *pub->topics; i++) {
         struct Topic *t = topic_open_shm_segment(pub->topics[i]);
         if(contain_pub(pid, t) | contain_sub(pid, t)) {
             existe = TRUE;
@@ -489,10 +490,10 @@ char* pubsub_list_topics(){
     int topicInt;
     int flag = 1;
     printf("Lista de tópicos: \n");
-    for(int i = 0; i < sizeof pub->topics; i++){
+    for(int i = 0; i < sizeof pub->topics / sizeof *pub->topics; i++){
         topicInt = pub->topics[i];
         if(topicInt != -1) {
-            printf("%d %s", topicInt, "\n");
+            printf("topic id %d\n", topicInt);
             flag = 0;
         }
     }

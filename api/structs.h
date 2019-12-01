@@ -27,7 +27,7 @@ struct Topic {
 };
 
 struct Pub {
-    int topics[20]; // array of topics ids
+    int topics[5]; // array of topics ids
     int topics_count; // topics counter
     int pos_topic; // free topic index
 };

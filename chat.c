@@ -45,7 +45,7 @@ int main(void) {
             break;
         case 1: // listar topicos
             pubsub_list_topics();
-            options();
+            // options();
             break;
         case 2: // cria topico
             printf("Digite o id do tópico: ");
