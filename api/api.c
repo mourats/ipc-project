@@ -51,8 +51,6 @@ int open_semaforo(key_t key, char *path) {
         printf("Erro ao tentar abrir semáforo.\n");
         return 0;
     }
-    printf("abrindo o semáforo %d\n", sem_id);
-
     return sem_id;
 }
 
@@ -99,7 +97,8 @@ void fill_topics(struct Pub *p) {
 
 int pubsub_init() {
     struct Pub *pub = pub_open_shm_segment();
-    printf("Segmento de memoria numero: %d\n", get_shmid_segment(PUB_KEY));
+    //id do segmento de memoria
+    //printf("Segmento de memoria numero: %d\n", get_shmid_segment(PUB_KEY));
     fill_topics(pub);
     pub->pos_topic = 0;
 
@@ -242,7 +241,7 @@ int pubsub_join(int topic_id) {
       }
 
       if(!fit) {
-          printf("Erro in pubsub_join.\n");
+          printf("Error in pubsub_join.\n");
           atualiza_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
@@ -282,7 +281,7 @@ int pubsub_subscribe(int topic_id) {
       }
 
       if(!fit) {
-          printf("error pubsub_subscribe\n");
+          printf("Error pubsub_subscribe\n");
           atualiza_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
@@ -369,7 +368,7 @@ int pubsub_publish(int topic_id, int msg) {
 
       pid_t pub_id = getpid();
       if(!contain_pub(pub_id, t)) {
-          printf("error pubsub_publish\n");
+          printf("Error pubsub_publish.\n");
           //unlock
           atualiza_semaforo(1, t->semid_mut, t->mutex);
           return 0;
@@ -377,7 +376,7 @@ int pubsub_publish(int topic_id, int msg) {
 
       if(t->msg_index % t->msg_count == 0 && !did_everyone_read(t)) {
           atualiza_semaforo(1, t->semid_mut, t->mutex);
-          printf("buffer cheio\n");
+          printf("Buffer cheio.\n");
           t->querem_escrever++;
           atualiza_semaforo(-1, t->semid_cond_pub, t->cond_pub);
           atualiza_semaforo(-1, t->semid_mut, t->mutex);
@@ -390,7 +389,6 @@ int pubsub_publish(int topic_id, int msg) {
       //unlock
       atualiza_semaforo(1, t->semid_mut, t->mutex);
 
-      printf("querem ler %d\n", t->querem_ler);
       if(t->querem_ler > 0) {
           atualiza_semaforo(t->querem_ler, t->semid_cond_read, t->cond_read);
 

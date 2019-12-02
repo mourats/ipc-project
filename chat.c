@@ -42,6 +42,7 @@ int main(void) {
         {
         case 0:
             pubsub_init();
+            options();
             break;
         case 1: // listar topicos
             pubsub_list_topics();
@@ -50,16 +51,19 @@ int main(void) {
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
             pubsub_create_topic(id);
+            options();
             break;
         case 3: // join topico
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
-            pubsub_join(id);    
+            pubsub_join(id);
+            options();
             break;
         case 4: // se inscreve no topico
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
             pubsub_subscribe(id);
+            options();
             break;
         case 5: // publica nova mensagem
             printf("Digite o id do tópico: ");
@@ -77,6 +81,7 @@ int main(void) {
             printf("Digite o id do tópico: ");
             scanf("%d", &id);
             pubsub_cancel(id);
+            options();
             break;
         case 8: // listar opções
             options();
