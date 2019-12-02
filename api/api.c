@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/ipc.h> 
 #include <sys/shm.h>
@@ -485,20 +487,30 @@ int pubsub_read(int topic_id) {
     return msg;
 }
 
+char* int_to_string(int x){
+    char* buffer = malloc(sizeof(char) * sizeof(int) * 4 + 1);
+    if (buffer) sprintf(buffer, "%d", x);
+    return buffer;
+}
+
 char* pubsub_list_topics(){
     struct Pub *pub = pub_open_shm_segment();
     int topicInt;
     int flag = 1;
-    printf("Lista de tópicos: \n");
+    char* result = "Lista de tópicos: \n";
     for(int i = 0; i < sizeof pub->topics / sizeof *pub->topics; i++){
         topicInt = pub->topics[i];
         if(topicInt != -1) {
-            printf("Tópico id: %d\n", topicInt);
+            strcat(result, "Tópico id:");
+            printf("tudo bom? ");
+            strcat(result, int_to_string(topicInt));
+            strcat(result, "\n");
             flag = 0;
         }
     }
     if(flag) {
-        printf("Nenhum tópico encontrado. \n");
+        strcat(result, "Nenhum tópico encontrado. \n");
     }
     pub_close_shm_segment(pub);
+    return result;
 }

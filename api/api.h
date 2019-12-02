@@ -6,5 +6,5 @@ extern int pubsub_cancel(int topic_id);
 extern int pubsub_cancel_semid();
 extern int pubsub_publish(int topic_id, int msg);
 extern int pubsub_read(int topic_id);
-extern void pubsub_list_topics();
+extern char *pubsub_list_topics();
 

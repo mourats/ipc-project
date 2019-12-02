@@ -38,14 +38,15 @@ int main(void) {
         int id;
         int msg;
         int pos;
+        char* list;
         switch (opcao)
         {
         case 0:
             pubsub_init();
             break;
         case 1: // listar topicos
-            pubsub_list_topics();
-            // options();
+            list = pubsub_list_topics();
+            printf("%s", list);
             break;
         case 2: // cria topico
             printf("Digite o id do tópico: ");
