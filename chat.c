@@ -21,7 +21,8 @@ int options() {
     printf("5- Publish\n");
     printf("6- Read\n");
     printf("7- Cancelar subscrição\n");
-    printf("8- Sair\n");
+    printf("8- Listar opções\n");
+    printf("9- Sair\n");
     printf("========================\n");
     return 0;
 }
@@ -77,10 +78,17 @@ int main(void) {
             scanf("%d", &id);
             pubsub_cancel(id);
             break;
-        default:
-            printf("Opção inválida.");
+        case 8: // listar opções
+            options();
+            break;
+        case 9: // sair
+            printf("Saindo.\n");
             sighandler(0);
             return 0;
+        default:
+            printf("Opção inválida.\n");
+            options();
+            break;
         }
     }
     return 0;
