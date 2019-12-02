@@ -7,7 +7,7 @@
 
 void sighandler(int signum) {
     pubsub_cancel_semid();
-    printf("\nSaindo do tópico, tchau...\n");
+    printf("\nSaindo do chat, tchau...\n");
     exit(1);
 }
 
@@ -27,7 +27,6 @@ int options() {
 }
 
 int main(void) {
-    // pubsub_init();
     signal(SIGINT, sighandler);
     options();
     while(1) {
@@ -45,7 +44,6 @@ int main(void) {
             break;
         case 1: // listar topicos
             pubsub_list_topics();
-            // options();
             break;
         case 2: // cria topico
             printf("Digite o id do tópico: ");
@@ -80,6 +78,7 @@ int main(void) {
             pubsub_cancel(id);
             break;
         default:
+            sighandler(0);
             return 0;
         }
     }
