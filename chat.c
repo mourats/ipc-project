@@ -78,6 +78,7 @@ int main(void) {
             pubsub_cancel(id);
             break;
         default:
+            printf("Opção inválida.");
             sighandler(0);
             return 0;
         }
