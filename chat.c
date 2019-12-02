@@ -21,7 +21,7 @@ int options() {
     printf("5- Publish\n");
     printf("6- Read\n");
     printf("7- Cancelar subscrição\n");
-    printf("8- Listar opções\n");
+    printf("8- Imprimir opções\n");
     printf("9- Sair\n");
     printf("========================\n");
     return 0;
@@ -89,7 +89,6 @@ int main(void) {
         case 9: // sair
             printf("Saindo.\n");
             sighandler(0);
-            return 0;
         default:
             printf("Opção inválida.\n");
             options();

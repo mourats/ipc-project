@@ -80,7 +80,7 @@ struct Topic * topic_open_shm_segment(int key) {
     int shm_id = shmget(key, sizeof(struct Topic), 0666|IPC_CREAT);
     if (shm_id == -1) {
         printf("Error shmget() topic.\n");
-        exit(1);  
+        exit(1);
     }
 
     return ((struct Topic*) shmat(shm_id, NULL,0));
@@ -335,10 +335,12 @@ int pubsub_cancel_semid() {
     pid_t pid = getpid();
 
     for(int i = 0; i < sizeof pub->topics; i++) {
-        struct Topic *t = topic_open_shm_segment(pub->topics[i]);
-        if(contain_sub(pid, t) | contain_pub(pid, t) ) {
-            pubsub_cancel(pub->topics[i]);
-            break;
+        if(pub->topics[i] != -1) {
+            struct Topic *t = topic_open_shm_segment(pub->topics[i]);
+            if(contain_sub(pid, t) | contain_pub(pid, t) ) {
+                pubsub_cancel(pub->topics[i]);
+                break;
+        	}
         }
     }
 }
