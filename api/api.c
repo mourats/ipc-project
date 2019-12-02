@@ -19,7 +19,7 @@ int get_shmid_segment(int key) {
     int shm_id;
     shm_id = shmget(get_ftok(key), sizeof(struct Pub), 0666 | IPC_CREAT);
     if (shm_id == -1) {
-        perror("Erro shmget()");
+        printf("Error shmget().\n");
         exit(1);
     }
 
@@ -34,7 +34,7 @@ int destroy_shm_segment(int topic_id) {
 struct Pub * pub_open_shm_segment() {
     int shm_id = shmget(get_ftok(PUB_KEY), sizeof(struct Pub), 0666 | IPC_CREAT);
     if (shm_id == -1) {
-        perror("Erro shmget()");
+        printf("Erro shmget().\n");
         exit(1);
     }
 
@@ -48,8 +48,8 @@ int pub_close_shm_segment(struct Pub *pub) {
 int open_semaforo(key_t key, char *path) {
     int sem_id;
     if((sem_id = semget(ftok(path, (key_t)key), 1, IPC_CREAT|0666)) == -1) {
-        perror("erro ao tentar abrir semáforo");
-        exit(1);
+        printf("Erro ao tentar abrir semáforo.\n");
+        return 0;
     }
     printf("abrindo o semáforo %d\n", sem_id);
 
@@ -61,8 +61,7 @@ void atualiza_semaforo(int sem_op, int semid, struct sembuf sem) {
     sem.sem_op = sem_op;
     sem.sem_flg = SEM_UNDO;
     if(semop(semid, &sem, 1) == -1) {
-        perror("operação de decremento no semáforo não realizada");
-        exit(1);
+        printf("Operação de decremento no semáforo não realizada.\n");
     }
 }
 
@@ -82,8 +81,8 @@ int contain_topic(int topic_id) {
 struct Topic * topic_open_shm_segment(int key) {
     int shm_id = shmget(key, sizeof(struct Topic), 0666|IPC_CREAT);
     if (shm_id == -1) {
-        perror("Erro shmget() topic");
-        exit(1);
+        printf("Error shmget() topic.\n");
+        exit(1);  
     }
 
     return ((struct Topic*) shmat(shm_id, NULL,0));
@@ -124,7 +123,7 @@ int array_is_full(struct Pub * pub) {
 
 int pubsub_create_topic(int topic_id) {
     if(contain_topic(topic_id)) {
-        perror("Tópico já existe");
+        printf("Tópico já existe.\n");
         return 0;
     }
 
@@ -146,20 +145,20 @@ int pubsub_create_topic(int topic_id) {
 
     t->arg_mut.val = 1;
     if(semctl(t->semid_mut, 0, SETVAL, t->arg_mut) == -1) {
-        perror("erro semctl SETVAL 0");
-        exit(1);
+        printf("Erro semctl SETVAL 0");
+        return 0;
     }
 
     t->arg_cond_read.val = 0;
     if(semctl(t->semid_cond_read, 0, SETVAL, t->arg_cond_read) == -1) {
-        perror("erro semctl SETVAL 1");
-        exit(1);
+        printf("Erro semctl SETVAL 1");
+        return 0;
     }
 
     t->arg_cond_pub.val = 0;
     if(semctl(t->semid_cond_pub, 0, SETVAL, t->arg_cond_pub) == -1) {
-        perror("erro semctl SETVAL 2");
-        exit(1);
+        printf("Erro semctl SETVAL 2");
+        return 0;
     }
 
     pub->topics[pub->pos_topic] = t->id;
@@ -228,7 +227,7 @@ int pubsub_join(int topic_id) {
       pid_t pub_id = getpid();
     
       if(existe_em_topico(pub_id, topic_id)) {
-          perror("Estais em um tópico");
+          printf("Estais em um tópico.\n");
           atualiza_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
@@ -243,7 +242,7 @@ int pubsub_join(int topic_id) {
       }
 
       if(!fit) {
-          perror("erro pubsub_join");
+          printf("Erro in pubsub_join.\n");
           atualiza_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
@@ -267,7 +266,7 @@ int pubsub_subscribe(int topic_id) {
       pid_t sub_id = getpid();
 
       if(existe_em_topico(sub_id, topic_id)) {
-          perror("Estais em um tópico");
+          printf("Estais em um tópico.\n");
           atualiza_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
@@ -398,8 +397,7 @@ int pubsub_publish(int topic_id, int msg) {
           t->querem_ler = 0;
           t->arg_cond_read.val = 0;
           if(semctl(t->semid_cond_read, 0, SETVAL, t->arg_cond_read) == -1) {
-              perror("erro semctl SETVAL");
-              exit(1);
+              printf("Error semctl SETVAL.\n");
           }
       }
 
@@ -476,8 +474,8 @@ int pubsub_read(int topic_id) {
           t->querem_escrever = 0;
           t->arg_cond_pub.val = 0;
           if(semctl(t->semid_cond_pub, 0, SETVAL, t->arg_cond_pub) == -1) {
-              perror("erro semctl SETVAL");
-              exit(1);
+              printf("Error semctl SETVAL.\n");
+              return 0;
           }
           return msg;
       }
