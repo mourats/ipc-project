@@ -259,7 +259,7 @@ int pubsub_join(int topic_id) {
 
 int pubsub_subscribe(int topic_id) {
     valida_topico(topic_id);
-    struct Pub *pub = pub_open_shm_segment(topic_id);
+    struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
@@ -298,7 +298,7 @@ int pubsub_subscribe(int topic_id) {
 
 int pubsub_cancel(int topic_id) {
     valida_topico(topic_id);
-    struct Pub *pub = pub_open_shm_segment(topic_id);
+    struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
@@ -357,7 +357,7 @@ int did_everyone_read(struct Topic *t) {
 
 int pubsub_publish(int topic_id, int msg) {
     valida_topico(topic_id);
-    struct Pub *pub = pub_open_shm_segment(topic_id);
+    struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
     t->semid_cond_read =  open_semaforo(topic_id, "files/file_shm_cond_read");
@@ -433,7 +433,7 @@ int getpos_sub(pid_t pid, struct Topic *t) {
 
 int pubsub_read(int topic_id) {
     valida_topico(topic_id);
-    struct Pub *pub = pub_open_shm_segment(topic_id);
+    struct Pub *pub = pub_open_shm_segment();
     struct Topic *t = topic_open_shm_segment(topic_id);
     t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
     t->semid_cond_read =  open_semaforo(topic_id, "files/file_shm_cond_read");
@@ -493,10 +493,12 @@ char* pubsub_list_topics(){
     for(int i = 0; i < sizeof pub->topics / sizeof *pub->topics; i++){
         topicInt = pub->topics[i];
         if(topicInt != -1) {
-            printf("topic id %d\n", topicInt);
+            printf("Tópico id: %d\n", topicInt);
             flag = 0;
         }
     }
-    if(flag)
+    if(flag) {
         printf("Nenhum tópico encontrado. \n");
+    }
+    pub_close_shm_segment(pub);
 }
