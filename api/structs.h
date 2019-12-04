@@ -12,21 +12,23 @@ union semun {
     unsigned short int array[1];
 };
 
+// tópico que contém as mensagens publicadas além dos ids de seus publishers e subscribers 
+// cada tópico também contém 3 semáforos, um para simular um mutex, outro para simular uma variável condicional de escrita 
+// e outro uma variável condicional de leitura
 struct Topic {
     int id;
-    int pubs_subs_count; // publishers and subscribers size
-    int pid_pub[50]; // size max of publishers 
-    int pid_sub[50][2]; // size max of subscribers and flag read
-    int msg_count; // messages counter
-    int msg[5]; // array of messages
-    int msg_index; // index of end of messages on array
+    int pubs_subs_count; // tamanho de cada array de publishers e subscribers
+    int pid_pub[50]; // array com os pids dos publishers
+    int pid_sub[50][2]; // array com os pids dos subscribers e a posição da última mensagem lida para cada subscriber
+    int msg_count; // total de mensagens
+    int msg[5]; // array com as mensagens
+    int msg_index; // posição da última mensagem publicada
     int querem_ler; // indica quantos processos estão bloqueados esperando para ler
     int querem_escrever;  // indica quantos processos estão bloqueados esperando para escrever
 
-    // id's dos três semáforos que serão usados, e semval, é uma variável que vai ser usada pra guardar
-    // os valores dos semáforoa temporariamente
-    int semid_mut, semid_cond_read, semid_cond_pub, semval;
-
+    // id's dos três semáforos que serão usados
+    int semid_mut, semid_cond_read, semid_cond_pub;
+    int semval;
     // estrutura para cada um dos semáforos
     struct sembuf mutex, cond_read, cond_pub;
     // variáveis que guardarão o valor de cada um dos semáforos

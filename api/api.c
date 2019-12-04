@@ -45,10 +45,13 @@ int pub_close_shm_segment(struct Pub *pub) {
     return shmdt(pub);
 }
 
+// cria um conjunto de semáforos ou obtém um conjunto de semáforos já existentes, retornando o seu id
+// tem como parametros uma chave e o caminho para um arquivo
 int open_semaforo(key_t key, char *path) {
     int sem_id;
-    // semget cria um conjunto de semáforos ou obtém o id de um conjunto de semáforos já existentes, no
-    // caso, o tamanho do conjunto de semáforos é 1
+    // semget
+    // o primeiro argumento é a chave, o segundo é o número de semáforos do conjunto, no caso será 1
+    // o terceiro argumento é uma flag especificando os direitos de acesso
     if((sem_id = semget(ftok(path, (key_t)key), 1, IPC_CREAT|0666)) == -1) {
         printf("Erro ao tentar abrir semáforo.\n");
         return 0;
@@ -57,16 +60,29 @@ int open_semaforo(key_t key, char *path) {
 }
 
 
-// operação no semáforo, que dependendo do sem_op vai ser um pedido de recurso ou uma restituição de recurso
-void atualiza_semaforo(int sem_op, int semid, struct sembuf sem) {
-    // sem_num é a posição do semáforo no conjunto de semáforos, como cada conjunto de semáforos foi criado com apenas 
-    // 1 semáforo, a posição é a primeira/0
+// efetua operações sobre o semáforo
+// o primeiro argumento é um inteiro, que se for negativo será um pedido de recurso e se for positivo será uma restituição de recurso
+// o segundo argumento é o id do conjunto de semáforos
+// o terceiro argumento é uma estrutura que especifica a posição, a operação e as flags de controle da operação sobre o semáforo
+void efetua_operacao_semaforo(int sem_op, int semid, struct sembuf sem) {
+    // posição do semáforo, como cada conjunto de semáforos tem apenas um semáforo, a posição é a primeira/0
     sem.sem_num = 0;
-    // define o tipo de operação realizada no semáforo
     sem.sem_op = sem_op;
     sem.sem_flg = SEM_UNDO;
     if(semop(semid, &sem, 1) == -1) {
         printf("Operação de decremento no semáforo não realizada.\n");
+    }
+}
+
+// atualiza o valor de um semáforo
+// o primeiro argumento é o id do semáforo
+// o segundo argumento é a posição do semáforo no conjunto de semáforos
+// o terceiro argumento é uma variável do tipo union semun que contém o valor do semáforo
+// o quarto argumento é o valor a ser atualizado no semáforo
+void atualiza_valor_semaforo(int id, int pos, union semun arg, int valor) {
+    arg.val = valor;
+    if(semctl(id, pos, SETVAL, arg) == -1) {
+        printf("Erro ao atualizar valor do semáforo\n");
     }
 }
 
@@ -125,6 +141,7 @@ int array_is_full(struct Pub * pub) {
     return 0;
 }
 
+// cria um tópico passando o id do tópico como parâmetro
 int pubsub_create_topic(int topic_id) {
     if(contain_topic(topic_id)) {
         printf("Tópico já existe.\n");
@@ -149,25 +166,13 @@ int pubsub_create_topic(int topic_id) {
     t->semid_cond_pub = open_semaforo(topic_id, "files/file_shm_cond_pub");
 
     // inicializa o valor do semáforo mutex com 1
-    t->arg_mut.val = 1;
-    if(semctl(t->semid_mut, 0, SETVAL, t->arg_mut) == -1) {
-        printf("Erro semctl SETVAL 0");
-        return 0;
-    }
+    atualiza_valor_semaforo(t->semid_mut, 0, t->arg_mut, 1);
 
     // inicializa o valor do semáforo da variável condicional de leitura com 0
-    t->arg_cond_read.val = 0;
-    if(semctl(t->semid_cond_read, 0, SETVAL, t->arg_cond_read) == -1) {
-        printf("Erro semctl SETVAL 1");
-        return 0;
-    }
+    atualiza_valor_semaforo(t->semid_cond_read, 0, t->arg_cond_read, 0);
 
     // inicializa o valor do semáforo da variável condicional de escrita com 0
-    t->arg_cond_pub.val = 0;
-    if(semctl(t->semid_cond_pub, 0, SETVAL, t->arg_cond_pub) == -1) {
-        printf("Erro semctl SETVAL 2");
-        return 0;
-    }
+    atualiza_valor_semaforo(t->semid_cond_read, 0, t->arg_cond_read, 0);
 
     pub->topics[pub->pos_topic] = t->id;
     pub->pos_topic++;
@@ -233,13 +238,13 @@ int pubsub_join(int topic_id) {
       if (t == NULL) return -1;
 
       // bloqueia o mutex
-      atualiza_semaforo(-1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
       pid_t pub_id = getpid();
     
       if(existe_em_topico(pub_id, topic_id)) {
           printf("Estais em um tópico.\n");
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
 
@@ -255,12 +260,12 @@ int pubsub_join(int topic_id) {
       if(!fit) {
           printf("Error in pubsub_join.\n");
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
       
       // libera o mutex
-      atualiza_semaforo(1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
       pub_close_shm_segment(pub);
       topic_close_shm_segment(t);
@@ -277,13 +282,13 @@ int pubsub_subscribe(int topic_id) {
       t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
       // bloqueia o mutex
-      atualiza_semaforo(-1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
       pid_t sub_id = getpid();
 
       if(existe_em_topico(sub_id, topic_id)) {
           printf("Estais em um tópico.\n");
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
 
@@ -300,12 +305,12 @@ int pubsub_subscribe(int topic_id) {
       if(!fit) {
           printf("Error pubsub_subscribe\n");
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
       
       // libera o mutex
-      atualiza_semaforo(1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
       pub_close_shm_segment(pub);
       topic_close_shm_segment(t);
@@ -322,7 +327,7 @@ int pubsub_cancel(int topic_id) {
       t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
 
       // bloqueia o mutex
-      atualiza_semaforo(-1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
 
       pid_t pubsub_id = getpid();
       
@@ -343,7 +348,7 @@ int pubsub_cancel(int topic_id) {
       }
       
       // libera o mutex
-      atualiza_semaforo(1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
       pub_close_shm_segment(pub);
       topic_close_shm_segment(t);
@@ -389,26 +394,26 @@ int pubsub_publish(int topic_id, int msg) {
       t->semid_cond_pub =  open_semaforo(topic_id, "files/file_shm_cond_pub");
       
       // bloqueia o mutex
-      atualiza_semaforo(-1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
 
       pid_t pub_id = getpid();
       if(!contain_pub(pub_id, t)) {
           printf("Error pubsub_publish.\n");
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
 
       while(t->msg_index % t->msg_count == 0 && !did_everyone_read(t)) {
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           printf("Buffer cheio.\n");
           // atualiza quantos processos estão esperando para escrever
           t->querem_escrever++;
           // bloqueia o semáforo de escrita 
-          atualiza_semaforo(-1, t->semid_cond_pub, t->cond_pub);
+          efetua_operacao_semaforo(-1, t->semid_cond_pub, t->cond_pub);
           // bloqueia o mutex
-          atualiza_semaforo(-1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
       }
 
       t->msg[t->msg_index % t->msg_count] = msg;
@@ -416,19 +421,16 @@ int pubsub_publish(int topic_id, int msg) {
       t->msg_index++;
       
       // libera o mutex
-      atualiza_semaforo(1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
       if(t->querem_ler > 0) {
           // libera os semáforos de leitura que estiverem bloqueados
-          atualiza_semaforo(t->querem_ler, t->semid_cond_read, t->cond_read);
+          efetua_operacao_semaforo(t->querem_ler, t->semid_cond_read, t->cond_read);
 
           // atualiza a quantidade de processos bloqueados para leitura em 0
           t->querem_ler = 0;
           // altera o valor do semáforo de leitura para 0
-          t->arg_cond_read.val = 0;
-          if(semctl(t->semid_cond_read, 0, SETVAL, t->arg_cond_read) == -1) {
-              printf("Error semctl SETVAL.\n");
-          }
+          atualiza_valor_semaforo(t->semid_cond_read, 0, t->arg_cond_read, 0);
       }
 
       pub_close_shm_segment(pub);
@@ -472,14 +474,14 @@ int pubsub_read(int topic_id) {
       t->semid_cond_pub =  open_semaforo(topic_id, "files/file_shm_cond_pub");
 
       // bloqueia o mutex
-      atualiza_semaforo(-1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
 
       pid_t sub_id = getpid();
       int pos_sub = getpos_sub(sub_id, t);
       if(pos_sub == -1) {
           printf("Error pubsub_read\n");
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           return 0;
       }
 
@@ -487,35 +489,29 @@ int pubsub_read(int topic_id) {
 
       while(index_msg_read >= t->msg_index) {
           // libera o mutex
-          atualiza_semaforo(1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
           printf("Sem mensagens.\n");
           // atualiza quantos processos estão esperando para ler
           t->querem_ler++;
           // bloqueia o semáforo de leitura
-          atualiza_semaforo(-1, t->semid_cond_read, t->cond_read);
+          efetua_operacao_semaforo(-1, t->semid_cond_read, t->cond_read);
           // bloqueia o mutex
-          atualiza_semaforo(-1, t->semid_mut, t->mutex);
+          efetua_operacao_semaforo(-1, t->semid_mut, t->mutex);
       }
       
       int msg = t->msg[index_msg_read % t->msg_count];
       t->pid_sub[pos_sub][1]++;
       
       // libera o mutex
-      atualiza_semaforo(1, t->semid_mut, t->mutex);
+      efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
       if(did_everyone_read(t) && t->querem_escrever > 0) {
           // libera os semáforos de escrita que estiverem bloqueados
-          atualiza_semaforo(t->querem_escrever, t->semid_cond_pub, t->cond_pub);
-
+          efetua_operacao_semaforo(t->querem_escrever, t->semid_cond_pub, t->cond_pub);
           // atualiza a quantidade de processos bloqueados para escrita em 0
           t->querem_escrever = 0;
           // altera o valor do semáforo de escrita em 0
-          t->arg_cond_pub.val = 0;
-          if(semctl(t->semid_cond_pub, 0, SETVAL, t->arg_cond_pub) == -1) {
-              printf("Error semctl SETVAL.\n");
-              return 0;
-          }
-          return msg;
+          atualiza_valor_semaforo(t->semid_cond_pub, 0, t->arg_cond_pub, 0);
       }
 
       pub_close_shm_segment(pub);
