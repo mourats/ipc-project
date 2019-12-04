@@ -13,8 +13,7 @@ sudo apt install gcc
 Compile o programa com o seguinte comando:
 
 ```bash
-chmod a+x compile.sh
-./compile.sh
+make
 ```
 
 ## Executar
