@@ -50,7 +50,8 @@ int pub_close_shm_segment(struct Pub *pub) {
 int open_semaforo(key_t key, char *path) {
     int sem_id;
     // semget
-    // o primeiro argumento é a chave, o segundo é o número de semáforos do conjunto, no caso será 1
+    // o primeiro argumento é a chave, 
+    // o segundo argumento é o número de semáforos do conjunto, no caso será 1
     // o terceiro argumento é uma flag especificando os direitos de acesso
     if((sem_id = semget(ftok(path, (key_t)key), 1, IPC_CREAT|0666)) == -1) {
         printf("Erro ao tentar abrir semáforo.\n");
@@ -228,6 +229,7 @@ int existe_em_topico(pid_t pid, int topic_id) {
     return existe;
 }
 
+// junta um processo que enviará mensagens ao tópico passando o id do tópico como parâmetro
 int pubsub_join(int topic_id) {
     if(valida_topico(topic_id)) {
       struct Pub *pub = pub_open_shm_segment();
@@ -274,6 +276,7 @@ int pubsub_join(int topic_id) {
     }
 }
 
+// junta um processo que receberá mensagens ao tópico passando o id do tópico como parâmetro
 int pubsub_subscribe(int topic_id) {
     if(valida_topico(topic_id)){
       struct Pub *pub = pub_open_shm_segment();
@@ -319,6 +322,7 @@ int pubsub_subscribe(int topic_id) {
     }
 }
 
+// cancela a subscrição de um processo ao tópico passando o id do tópico como parâmetro
 int pubsub_cancel(int topic_id) {
     if(valida_topico(topic_id)){
       struct Pub *pub = pub_open_shm_segment();
@@ -384,11 +388,12 @@ int did_everyone_read(struct Topic *t) {
     return everybody_read;
 }
 
+// um processo publisher envia uma mensagem ao tópico cujo id é passado como parâmetro
 int pubsub_publish(int topic_id, int msg) {
     if(valida_topico(topic_id)){
       struct Pub *pub = pub_open_shm_segment();
       struct Topic *t = topic_open_shm_segment(topic_id);
-      // abre os três semáforos e guarda os id's nas variáveis correspondentes
+      // abre os três semáforos e guarda os ids nas variáveis correspondentes
       t->semid_mut = open_semaforo(topic_id, "files/file_shm_mutex");
       t->semid_cond_read =  open_semaforo(topic_id, "files/file_shm_cond_read");
       t->semid_cond_pub =  open_semaforo(topic_id, "files/file_shm_cond_pub");
@@ -404,6 +409,8 @@ int pubsub_publish(int topic_id, int msg) {
           return 0;
       }
 
+      // caso o buffer esteja cheio, o processo é bloqueado até que todos os processos
+      // subscribers tenham lido todas as mensagens
       while(t->msg_index % t->msg_count == 0 && !did_everyone_read(t)) {
           // libera o mutex
           efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
@@ -423,6 +430,7 @@ int pubsub_publish(int topic_id, int msg) {
       // libera o mutex
       efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
+      // acorda eventuais processos subscribers que estejam bloqueados esperando por mensagens
       if(t->querem_ler > 0) {
           // libera os semáforos de leitura que estiverem bloqueados
           efetua_operacao_semaforo(t->querem_ler, t->semid_cond_read, t->cond_read);
@@ -464,6 +472,7 @@ int getpos_sub(pid_t pid, struct Topic *t) {
     return contain;
 }
 
+// um processo subscriber recebe uma mensagem do tópico cujo id é passado como parâmetro
 int pubsub_read(int topic_id) {
     if(valida_topico(topic_id)){
       struct Pub *pub = pub_open_shm_segment();
@@ -487,6 +496,8 @@ int pubsub_read(int topic_id) {
 
       int index_msg_read = t->pid_sub[pos_sub][1];
 
+      // caso não haja novas mensagens, o processo é bloqueado 
+      // até que chegue alguma nova mensagem no tópico
       while(index_msg_read >= t->msg_index) {
           // libera o mutex
           efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
@@ -505,6 +516,8 @@ int pubsub_read(int topic_id) {
       // libera o mutex
       efetua_operacao_semaforo(1, t->semid_mut, t->mutex);
 
+      // acorda eventuais processos publishers que estejam boqueados esperando que 
+      // todos os processos subscribers tenham lido todas as mensagens
       if(did_everyone_read(t) && t->querem_escrever > 0) {
           // libera os semáforos de escrita que estiverem bloqueados
           efetua_operacao_semaforo(t->querem_escrever, t->semid_cond_pub, t->cond_pub);

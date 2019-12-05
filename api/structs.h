@@ -13,8 +13,8 @@ union semun {
 };
 
 // tópico que contém as mensagens publicadas além dos ids de seus publishers e subscribers 
-// cada tópico também contém 3 semáforos, um para simular um mutex, outro para simular uma variável condicional de escrita 
-// e outro uma variável condicional de leitura
+// cada tópico também contém 3 semáforos, um para simular um mutex, outro para simular uma 
+// variável condicional de escrita e outro uma variável condicional de leitura
 struct Topic {
     int id;
     int pubs_subs_count; // tamanho de cada array de publishers e subscribers
@@ -29,7 +29,7 @@ struct Topic {
     // id's dos três semáforos que serão usados
     int semid_mut, semid_cond_read, semid_cond_pub;
     int semval;
-    // estrutura para cada um dos semáforos
+    // estrutura para efetuar operações em cada um dos semáforos
     struct sembuf mutex, cond_read, cond_pub;
     // variáveis que guardarão o valor de cada um dos semáforos
     union semun arg_mut, arg_cond_read, arg_cond_pub;
